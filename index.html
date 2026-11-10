@@ -223,6 +223,17 @@ audio{width:100%;height:40px}
 .cat-opt{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;border-radius:14px;border:1px solid var(--line);background:var(--surface);font-size:12.5px;font-weight:600;text-align:center}
 .cat-opt.on{border-color:var(--c);box-shadow:0 0 0 1.5px var(--c) inset;background:color-mix(in srgb,var(--c) 8%,var(--surface))}
 .photo-box{border:2px dashed var(--line);border-radius:18px;background:var(--surface);min-height:220px;display:grid;place-items:center;overflow:hidden;position:relative}
+.scanbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.scanbar .chip{padding:6px 12px;font-size:13px}
+.scanbar>.autolbl,.scanbar>.note{width:100%}
+.crop{position:fixed;inset:0;z-index:60;background:#0d1318;color:#fff;display:flex;flex-direction:column;padding:calc(12px + env(safe-area-inset-top,0px)) 0 calc(12px + env(safe-area-inset-bottom,0px))}
+.crop-top{padding:4px 16px 10px;display:flex;flex-direction:column;gap:2px}.crop-top span{font-size:13px;opacity:.75}
+.crop-stage{flex:1;display:grid;place-items:center;min-height:0;overflow:hidden}
+.crop-img{position:relative;touch-action:none;user-select:none}.crop-img img{width:100%;height:100%;display:block;pointer-events:none}
+.crop-img svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.crop-img polygon{fill:rgba(238,100,32,.16);stroke:#EE6420;stroke-width:.006;vector-effect:non-scaling-stroke;stroke-width:2.5px}
+.crop-h{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:3px solid #fff;background:#EE6420;box-shadow:0 2px 8px rgba(0,0,0,.5);padding:0;touch-action:none}
+.crop-foot{display:flex;gap:8px;padding:12px 16px 0}.crop-foot .btn{flex:1}.crop-foot .btn-ghost{color:#fff;border-color:rgba(255,255,255,.35);background:transparent}
 .photo-box img{width:100%;max-height:52vh;object-fit:contain;display:block;background:#000}
 .photo-ph{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted);padding:24px;text-align:center}
 .photo-ph svg{width:46px;height:46px;stroke:currentColor;fill:none;stroke-width:1.5}
@@ -590,7 +601,7 @@ const STEPS_F=['foto','valor','detalle','factura','pago','revisar'], STEPS_P=['p
 const steps=()=> W&&W.mode==='persona'?STEPS_P:STEPS_F;
 const MOTIVOS=[['ADELANTO DE SUELDO','MOBRA'],['COMIDA','ALIMENTACION'],['PAGO DE JORNAL','MOBRA'],['MOVILIZACIÓN','ADM'],['OTRO','']];
 function elegirTipo(){ openLayer(`${sheetHead('¿Qué vas a registrar?')}<div class="pay-opts">
-  <button class="pay" data-act="nuevo-factura"><span class="ico" style="--c:var(--accent)">${svg(UI.scan)}</span><div><div>Compra con factura</div><small>Toma la foto y la app llena los datos</small></div></button>
+  <button class="pay" data-act="nuevo-factura"><span class="ico" style="--c:var(--accent)">${svg(UI.scan)}</span><div><div>Compra con factura</div><small>Solo toma la foto: recorta la hoja y llena todo</small></div></button>
   <button class="pay" data-act="voz"><span class="ico" style="--c:var(--bad)">${svg(UI.mic)}</span><div><div>Nota de voz</div><small>Dilo ahora y complétalo después con la foto</small></div></button>
   <button class="pay" data-act="nuevo-persona"><span class="ico" style="--c:var(--ink)">${svg(UI.person)}</span><div><div>Pago a una persona</div><small>Adelantos, comida, jornales. Sin factura.</small></div></button></div>`); }
 function nuevoGasto(mode='factura'){ W={mode,step:0,isNew:true,d:{tipo:'gasto',fecha:todayISO(),pago:'EFECTIVO',valor:'',categoria:'',detalle:'',lugar:'',beneficiario:'',factura:'',numero:''},foto:null,fotoUrl:null,fotoChanged:false,comp:null,compUrl:null,compChanged:false,auto:new Set(),ocr:null,ocrC:null}; renderWz(); }
@@ -604,12 +615,14 @@ const dl=(id,campo,p=false)=>`<datalist id="${id}">${sugerencias(campo,p).map(v=
 
 function renderWz(){
   const STEPS=steps(), st=STEPS[W.step], d=W.d; let body='';
-  if(st==='foto') body=`<div class="q">Toma la foto de la factura</div><p class="hint">Que se lean bien el número, la fecha y el valor.</p>
+  if(st==='foto') body=`<div class="q">Toma la foto de la factura</div><p class="hint">Pon la hoja sobre algo oscuro. La app la recorta, la mejora y llena los datos sola.</p>
     <div class="photo-box">${W.fotoUrl?`<img src="${W.fotoUrl}" alt="Foto de la factura">`:`<div class="photo-ph">${svg(UI.cam)}<span>Aún no hay foto</span></div>`}</div>
     <div class="two"><button class="btn btn-primary" data-act="cam">${svg(UI.cam).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}${W.fotoUrl?'Otra foto':'Tomar foto'}</button>
     <button class="btn btn-ghost" data-act="gal">${svg(UI.img).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Galería</button></div>
+    ${W.fotoUrl?`<div class="scanbar">${W.bordes==='ok'?`<span class="autolbl">${svg('<path d="m5 12 5 5 9-10"/>').replace('<svg','<svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.6;vertical-align:-2px"')} Hoja recortada y mejorada</span>`:W.bordes==='no'?`<span class="note" style="margin:0">No encontré bien los bordes. Ajústalos si quieres.</span>`:''}
+      <button class="chip" data-act="bordes">Ajustar bordes</button>${W.origC?`<button class="chip ${W.scanModo==='original'?'on':''}" data-act="scan-modo">${W.scanModo==='original'?'Ver escaneada':'Ver original'}</button>`:''}</div>`:''}
     ${ocrHTML()}
-    ${W.fotoUrl?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button class="link" data-act="quitar-foto">Quitar foto</button>${W.ocr&&W.ocr.estado!=='leyendo'?`<button class="link" data-act="releer">Leer otra vez</button>`:''}</div>`:''}`;
+    ${W.fotoUrl?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button class="link" data-act="quitar-foto">Quitar foto</button>${W.ocr&&W.ocr.estado!=='leyendo'?`<button class="link" data-act="releer">Leer otra vez</button>`:''}${W.ocr&&W.ocr.estado==='listo'&&W.ocr.campos.length?`<button class="link" data-act="w-go" data-s="${steps().length-1}">Ir a revisar</button>`:''}</div>`:''}`;
   if(st==='persona'){ const top=sugerencias('beneficiario',true).slice(0,6);
     body=`<div class="q">¿A quién le diste el dinero?</div><p class="hint">Para adelantos, la señora de la comida o pagos sin factura.</p>
     <div class="field"><label for="w-benef">Nombre</label><input class="inp" id="w-benef" data-f="beneficiario" list="dl-per" placeholder="Ej.: JOSE MAESTRO MAYOR" value="${esc(d.beneficiario)}" autocapitalize="characters">${dl('dl-per','beneficiario',true)}
@@ -664,7 +677,7 @@ function renderWz(){
   const skip = st==='foto' && !W.fotoUrl ? 'No me dieron factura' : 'Siguiente';
   openLayer(`${sheetHead(W.mode==='persona'?(W.isNew?'Pago a persona':'Editar pago'):(W.isNew?'Nuevo gasto':'Editar gasto'),'wz-close')}
     <div class="steps" aria-label="Paso ${W.step+1} de ${STEPS.length}">${STEPS.map((_,i)=>`<i class="${i<=W.step?'on':''}"></i>`).join('')}</div>
-    <div class="wz-body">${W.audioUrl&&W.step===0?`<div class="card" style="margin-bottom:14px"><div class="note" style="margin:0 0 6px">Tu nota de voz${W.d.voz?`: <i>“${esc(W.d.voz)}”</i>`:''}</div><audio controls src="${W.audioUrl}"></audio></div>`:''}${body}</div>
+    <div class="wz-body">${W.aviso&&W.aviso.step===W.step?`<div class="ocr ${W.aviso.ok?'ok':''}" role="status" style="margin:0 0 14px"><span>${W.aviso.txt}</span></div>`:''}${W.audioUrl&&W.step===0?`<div class="card" style="margin-bottom:14px"><div class="note" style="margin:0 0 6px">Tu nota de voz${W.d.voz?`: <i>“${esc(W.d.voz)}”</i>`:''}</div><audio controls src="${W.audioUrl}"></audio></div>`:''}${body}</div>
     <div class="wz-foot">${W.step>0&&!(last&&!W.isNew)?`<button class="btn btn-ghost" data-act="w-back" style="flex:.6">Atrás</button>`:''}
       ${last?`<button class="btn btn-primary" data-act="w-save">Guardar gasto</button>`:`<button class="btn ${st==='foto'&&!W.fotoUrl?'btn-ghost':'btn-primary'}" data-act="w-next">${skip}</button>`}</div>
     <p id="w-err" class="note" style="color:var(--bad)" role="alert"></p>`, true);
@@ -682,7 +695,7 @@ async function wzSave(){
   W.step=STEPS.length-1; const per=W.mode==='persona';
   const d=W.d, prev=W.isNew?null:S.movs.find(m=>m.id===W.id);
   const m={ id:W.id||uid(), obraId:prev?.obraId||S.obraId, tipo:'gasto', fecha:d.fecha, detalle:d.detalle.trim().toUpperCase(), beneficiario:d.beneficiario.trim().toUpperCase(), lugar:per?'':d.lugar.trim().toUpperCase(),
-    factura:per?'':d.factura.trim(), persona:per, pago:d.pago, numero:d.pago==='EFECTIVO'?'':d.numero.trim(), valor:parseMonto(d.valor), categoria:d.categoria, fotoId:prev?.fotoId||null, compId:prev?.compId||null, audioId:prev?.audioId||null, voz:prev?.voz||'', pendiente:false, ocrTexto:W.ocr?.texto??prev?.ocrTexto??'', ocrComp:W.ocrC?.texto??prev?.ocrComp??'', creado:prev?.creado||Date.now(), editado:Date.now() };
+    factura:per?'':d.factura.trim(), ruc:per?'':(d.ruc||prev?.ruc||''), persona:per, pago:d.pago, numero:d.pago==='EFECTIVO'?'':d.numero.trim(), valor:parseMonto(d.valor), categoria:d.categoria, fotoId:prev?.fotoId||null, compId:prev?.compId||null, audioId:prev?.audioId||null, voz:prev?.voz||'', pendiente:false, ocrTexto:W.ocr?.texto??prev?.ocrTexto??'', ocrComp:W.ocrC?.texto??prev?.ocrComp??'', creado:prev?.creado||Date.now(), editado:Date.now() };
   if(d.pago==='EFECTIVO' && W.comp){ W.comp=null; W.compChanged=true; }
   if(W.compChanged){ if(m.compId) await DB.del('fotos',m.compId); m.compId=null; if(W.comp){ m.compId=uid(); await DB.put('fotos',{id:m.compId,blob:W.comp}); } }
   if(W.fotoChanged){ if(m.fotoId) await DB.del('fotos',m.fotoId); m.fotoId=null; if(W.foto){ m.fotoId=uid(); await DB.put('fotos',{id:m.fotoId,blob:W.foto}); } }
@@ -734,27 +747,33 @@ async function getOcr(onPct){
 }
 let OCRW_cb=null;
 function ocrHTML(){ if(!W||!W.ocr) return ''; const o=W.ocr;
-  if(o.estado==='leyendo') return `<div class="ocr" role="status">${svg(UI.scan).replace('<svg','<svg style="width:20px;height:20px;stroke:var(--accent);fill:none;stroke-width:2;flex:none"')}<span>Leyendo la factura…</span><div class="pbar"><i id="ocr-p" style="width:${Math.round(o.pct*100)}%"></i></div></div>`;
-  if(o.estado==='listo') return `<div class="ocr ok" role="status">${svg('<path d="m5 12 5 5 9-10"/>').replace('<svg','<svg style="width:20px;height:20px;stroke:var(--good);fill:none;stroke-width:2.4;flex:none"')}<span>${o.campos.length?`Llené: <b>${o.campos.join(', ')}</b>. Revisa en los siguientes pasos.`:'No pude leer datos claros. Llénalos a mano.'}</span></div>`;
+  if(o.estado==='leyendo') return `<div class="ocr" role="status">${svg(UI.scan).replace('<svg','<svg style="width:20px;height:20px;stroke:var(--accent);fill:none;stroke-width:2;flex:none"')}<span>${o.via==='claude'?'Leyendo la factura con Claude…':'Leyendo la factura sin internet…'}</span><div class="pbar"><i id="ocr-p" style="width:${Math.round(o.pct*100)}%"></i></div></div>`;
+  if(o.estado==='listo' && o.noFact) return `<div class="ocr">Esta foto no parece una factura. Revisa los datos o toma otra.</div>`;
+  if(o.estado==='listo') return `<div class="ocr ok" role="status">${svg('<path d="m5 12 5 5 9-10"/>').replace('<svg','<svg style="width:20px;height:20px;stroke:var(--good);fill:none;stroke-width:2.4;flex:none"')}<span>${o.campos.length?`Llené: <b>${o.campos.join(', ')}</b>. Revisa en los siguientes pasos.`:'No pude leer datos claros. Llénalos a mano.'}${o.via==='local'&&!getKey()&&o.campos.length<5?'<br><small style="color:var(--muted)">Con internet y tu clave de Claude (Más → Claude) la lectura es mucho más exacta.</small>':''}</span></div>`;
   return `<div class="ocr">No pude leer la foto. Llena los datos a mano.</div>`; }
 const NOMBRES={valor:'valor',fecha:'fecha',factura:'n.º de factura',beneficiario:'beneficiario',lugar:'lugar',detalle:'detalle',pago:'forma de pago',categoria:'categoría'};
 async function autoLeer(forzar=false){
-  if(!W||!W.foto) return; const yo=W; yo.ocr={estado:'leyendo',pct:0,campos:[]}; if(forzar){ yo.auto.forEach(k=>{ yo.touched?.delete(k); }); }
+  if(!W||!W.foto) return; const yo=W; const nube=!!getKey() && navigator.onLine;
+  yo.ocr={estado:'leyendo',pct:0,campos:[],via:nube?'claude':'local'}; if(forzar){ yo.auto.forEach(k=>{ yo.touched?.delete(k); }); }
   if(steps()[W.step]==='foto') renderWz();
-  OCRW_cb=p=>{ yo.ocr.pct=p; const el=$('#ocr-p'); if(el&&W===yo) el.style.width=Math.round(p*100)+'%'; };
+  OCRW_cb=p=>{ if(yo.ocr.via!=='local') return; yo.ocr.pct=p; const el=$('#ocr-p'); if(el&&W===yo) el.style.width=Math.round(p*100)+'%'; };
+  let out=null, texto='';
   try{
-    const w=await getOcr(); const {data}=await w.recognize(yo.foto);
+    if(nube){ try{ out=await leerConClaude(yo.foto); texto=out._texto; }catch(e){ console.warn('claude',e); out=null; if(W===yo){ yo.ocr.via='local'; yo.ocr.pct=0; if(steps()[W.step]==='foto') renderWz(); } } }
     if(W!==yo) return;
-    const out=parseFactura(data.text||''); const campos=[];
-    for(const [k,v] of Object.entries(out)){ if(!v) continue; if(yo.touched&&yo.touched.has(k)) continue; if(k==='categoria' && yo.d.categoria && !yo.auto.has(k)) continue; if(yo.pend && ['detalle','valor','beneficiario'].includes(k) && yo.d[k] && !yo.auto.has(k)) continue;
+    if(!out){ const w=await getOcr(); const {data}=await w.recognize(yo.foto); if(W!==yo) return; texto=data.text||''; out=parseFactura(texto); }
+    out=completarConHistorial(out,texto); const campos=[];
+    for(const [k,v] of Object.entries(out)){ if(!v||k[0]==='_') continue; if(k==='ruc'){ yo.d.ruc=v; continue; } if(yo.touched&&yo.touched.has(k)) continue; if(k==='categoria' && yo.d.categoria && !yo.auto.has(k)) continue; if(yo.pend && ['detalle','valor','beneficiario'].includes(k) && yo.d[k] && !yo.auto.has(k)) continue;
       yo.d[k]= k==='valor'? String(v.toFixed(2)).replace('.',','): v; yo.auto.add(k); campos.push(NOMBRES[k]); }
-    yo.ocr={estado:'listo',campos,texto:data.text};
+    yo.ocr={estado:'listo',campos,texto,via:yo.ocr.via,noFact:out._noFactura};
+    if(campos.length && !out._noFactura) autoAvanzar(yo);
   }catch(e){ console.warn(e); if(W===yo) yo.ocr={estado:'error',campos:[]}; }
-  if(W===yo){ const st=steps()[W.step]; const act=document.activeElement; if(st==='foto'||st==='revisar'||!(act&&act.matches&&act.matches('.wz-body input'))) renderWz(); }
+  if(W===yo){ const st=steps()[W.step]; const act=document.activeElement; if(st==='foto'||W.aviso||!(act&&act.matches&&act.matches('.wz-body input'))) renderWz(); }
 }
 function parseFactura(txt){
   const T=txt.toUpperCase().replace(/[|]/g,' '); const out={};
   const lines=T.split('\n').map(l=>l.replace(/\s+/g,' ').trim()).filter(l=>l.length>1);
+  const ru=T.match(/R\.?\s?U\.?\s?C\.?\s*[:.Nº°O]*\s*(\d{13})/)||T.match(/(?<!\d)(\d{10}001)(?!\d)/); if(ru) out.ruc=ru[1];
   let m=T.match(/(\d{3})\s?[-–.]\s?(\d{3})\s?[-–.]\s?(\d{5,9})/); if(m) out.factura=`${m[1]}-${m[2]}-${m[3].padStart(9,'0')}`;
   const hoy=new Date(); hoy.setHours(23,59);
   const fechas=[]; for(const x of T.matchAll(/(\d{1,2})\s?[\/\-.]\s?(\d{1,2})\s?[\/\-.]\s?(20\d{2}|\d{2})(?!\d)/g)){ let d=+x[1],mo=+x[2],y=+x[3]; if(y<100)y+=2000; fechas.push([d,mo,y]); }
@@ -772,8 +791,6 @@ function parseFactura(txt){
   if(/TRANSFER/.test(T)) out.pago='TRANSFERENCIA'; else if(/CHEQUE/.test(T)) out.pago='CHEQUE'; else if(/EFECTIVO|SIN UTILIZACI/.test(T)) out.pago='EFECTIVO';
   const i=lines.findIndex(l=>/DESCRIPCI|DETALLE|CONCEPTO|PRODUCTO/.test(l));
   if(i>-1){ for(const l of lines.slice(i+1,i+4)){ const t=l.replace(moneyRe,' ').replace(/^\s*\d+([.,]\d+)?\s+/,'').replace(/[^A-ZÁÉÍÓÚÑ0-9 #\/.\-]/g,' ').replace(/\s+/g,' ').trim(); if(t.length>=3 && /[A-ZÁÉÍÓÚÑ]{3}/.test(t) && !/TOTAL|IVA|SUBTOTAL/.test(t)){ out.detalle=t.slice(0,40); break; } } }
-  if(out.beneficiario){ const p=S.movs.find(mv=>mv.beneficiario===out.beneficiario); if(p){ if(!out.lugar&&p.lugar) out.lugar=p.lugar; if(p.categoria) out.categoria=p.categoria; } }
-  if(!out.categoria) out.categoria=adivinarCat(T);
   return out;
 }
 function adivinarCat(T){
@@ -782,6 +799,163 @@ function adivinarCat(T){
   for(const [re,c] of rules) if(re.test(T) && CAT[c] && !CAT[c].oculta) return c;
   return '';
 }
+
+/* ---------- escáner: encontrar la hoja, enderezarla y mejorarla ---------- */
+function otsu(hist,n){ let sum=0; for(let i=0;i<256;i++) sum+=i*hist[i]; let sB=0,wB=0,best=-1,th=128;
+  for(let i=0;i<256;i++){ wB+=hist[i]; if(!wB) continue; const wF=n-wB; if(!wF) break; sB+=i*hist[i]; const mB=sB/wB, mF=(sum-sB)/wF, v=wB*wF*(mB-mF)*(mB-mF); if(v>best){best=v;th=i;} } return th; }
+function hull(pts){ pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]); const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]); const lo=[],up=[];
+  for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
+  for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0) up.pop(); up.push(p); }
+  up.pop(); lo.pop(); return lo.concat(up); }
+function polyArea(q){ let a=0; for(let i=0;i<q.length;i++){ const p=q[i],n=q[(i+1)%q.length]; a+=p[0]*n[1]-n[0]*p[1]; } return Math.abs(a)/2; }
+/* el cuadrilátero de mayor área con vértices en la envolvente (aprox. de 4 lados) */
+function quadDeHull(h){ const n=h.length; if(n<4) return null; const step=Math.max(1,Math.ceil(n/36)); const idx=[]; for(let i=0;i<n;i+=step) idx.push(i);
+  let best=0,bq=null; const m=idx.length;
+  for(let a=0;a<m;a++) for(let b=a+1;b<m;b++) for(let c=b+1;c<m;c++) for(let d=c+1;d<m;d++){ const q=[h[idx[a]],h[idx[b]],h[idx[c]],h[idx[d]]]; const ar=polyArea(q); if(ar>best){best=ar;bq=q;} }
+  return bq; }
+function ordenarEsquinas(q){ const s=q.map(p=>p[0]+p[1]), d=q.map(p=>p[0]-p[1]); const tl=q[s.indexOf(Math.min(...s))], br=q[s.indexOf(Math.max(...s))], tr=q[d.indexOf(Math.max(...d))], bl=q[d.indexOf(Math.min(...d))];
+  const set=new Set([tl,tr,br,bl]); if(set.size===4) return [tl,tr,br,bl];
+  const cx=q.reduce((a,p)=>a+p[0],0)/4, cy=q.reduce((a,p)=>a+p[1],0)/4; const o=q.slice().sort((a,b)=>Math.atan2(a[1]-cy,a[0]-cx)-Math.atan2(b[1]-cy,b[0]-cx)); // desde arriba-izq en sentido horario
+  let k=0,mn=1e9; o.forEach((p,i)=>{ if(p[0]+p[1]<mn){mn=p[0]+p[1];k=i;} }); return [0,1,2,3].map(i=>o[(k+i)%4]); }
+/* devuelve las 4 esquinas normalizadas (0..1) de la hoja, o null si no la encuentra */
+function detectarHoja(src){
+  const k=Math.min(1,320/Math.max(src.width,src.height)), w=Math.max(8,Math.round(src.width*k)), h=Math.max(8,Math.round(src.height*k));
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(src,0,0,w,h);
+  const p=x.getImageData(0,0,w,h).data, N=w*h, sc=new Uint8Array(N), hist=new Uint32Array(256);
+  for(let i=0,j=0;j<N;i+=4,j++){ const r=p[i],g=p[i+1],b=p[i+2], mx=Math.max(r,g,b), mn=Math.min(r,g,b); let v=.299*r+.587*g+.114*b-(mx-mn)*.9; v=v<0?0:v>255?255:v|0; sc[j]=v; hist[v]++; }
+  const th=otsu(hist,N); let m=new Uint8Array(N); for(let j=0;j<N;j++) m[j]=sc[j]>th?1:0;
+  // cerrar huecos que deja el texto: dilatar y luego erosionar (radio 2)
+  const morf=(a,dil)=>{ const o=new Uint8Array(N); for(let y=0;y<h;y++) for(let X=0;X<w;X++){ let hit=false;
+      for(let dy=-2;dy<=2&&!hit;dy++){ const yy=y+dy; if(yy<0||yy>=h) continue; for(let dx=-2;dx<=2;dx++){ const xx=X+dx; if(xx<0||xx>=w) continue; if(a[yy*w+xx]===(dil?1:0)){ hit=true; break; } } }
+      o[y*w+X]= dil? (hit?1:0) : (hit?0:1); } return o; };
+  m=morf(morf(m,true),false);
+  const lab=new Int32Array(N), st=new Int32Array(N); let id=0,bestId=0,bestScore=0,bestN=0;
+  for(let s=0;s<N;s++){ if(!m[s]||lab[s]) continue; id++; let sp=0; st[sp++]=s; lab[s]=id; let n=0,cx=0,cy=0;
+    while(sp){ const q=st[--sp]; n++; const qx=q%w, qy=(q/w)|0; cx+=qx; cy+=qy;
+      if(qx>0&&m[q-1]&&!lab[q-1]){lab[q-1]=id;st[sp++]=q-1;} if(qx<w-1&&m[q+1]&&!lab[q+1]){lab[q+1]=id;st[sp++]=q+1;}
+      if(qy>0&&m[q-w]&&!lab[q-w]){lab[q-w]=id;st[sp++]=q-w;} if(qy<h-1&&m[q+w]&&!lab[q+w]){lab[q+w]=id;st[sp++]=q+w;} }
+    const dc=Math.hypot(cx/n-w/2,cy/n-h/2)/Math.hypot(w/2,h/2), score=n*(1-.6*dc); if(score>bestScore){bestScore=score;bestId=id;bestN=n;} }
+  if(!bestId || bestN<N*.06) return null;
+  const pts=[]; for(let y=0;y<h;y++){ let a=-1,b=-1; for(let X=0;X<w;X++) if(lab[y*w+X]===bestId){ if(a<0)a=X; b=X; } if(a>=0){ pts.push([a,y]); if(b!==a) pts.push([b,y]); } }
+  const hl=hull(pts); const q=quadDeHull(hl); if(!q) return null;
+  const qa=polyArea(q), ha=polyArea(hl); if(qa<ha*.85 || qa<N*.06) return null; // no parece una hoja de 4 lados
+  if(qa>N*.94) return null; // la hoja ya llena la foto
+  return ordenarEsquinas(q).map(([X,Y])=>[Math.min(1,Math.max(0,(X+.5)/w)),Math.min(1,Math.max(0,(Y+.5)/h))]);
+}
+function homografia(dst,src){ // H tal que src ~ H*dst  (8 incógnitas)
+  const A=[],B=[]; for(let i=0;i<4;i++){ const [x,y]=dst[i],[u,v]=src[i]; A.push([x,y,1,0,0,0,-u*x,-u*y]); B.push(u); A.push([0,0,0,x,y,1,-v*x,-v*y]); B.push(v); }
+  for(let i=0;i<8;i++){ let p=i; for(let r=i+1;r<8;r++) if(Math.abs(A[r][i])>Math.abs(A[p][i])) p=r; [A[i],A[p]]=[A[p],A[i]]; [B[i],B[p]]=[B[p],B[i]];
+    for(let r=0;r<8;r++){ if(r===i) continue; const f=A[r][i]/A[i][i]; for(let c=i;c<8;c++) A[r][c]-=f*A[i][c]; B[r]-=f*B[i]; } }
+  return B.map((b,i)=>b/A[i][i]).concat(1); }
+/* endereza la hoja (esquinas normalizadas) y le da aspecto de escaneo */
+function enderezar(src,quad,mejorar=true){
+  const W0=src.width,H0=src.height, q=quad.map(([a,b])=>[a*W0,b*H0]), dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+  let ow=Math.max(dist(q[0],q[1]),dist(q[3],q[2])), oh=Math.max(dist(q[0],q[3]),dist(q[1],q[2])); const s=Math.min(1,1800/Math.max(ow,oh)); ow=Math.max(1,Math.round(ow*s)); oh=Math.max(1,Math.round(oh*s));
+  const sc=document.createElement('canvas'); sc.width=W0; sc.height=H0; const sx=sc.getContext('2d',{willReadFrequently:true}); sx.drawImage(src,0,0); const sp=sx.getImageData(0,0,W0,H0).data;
+  const oc=document.createElement('canvas'); oc.width=ow; oc.height=oh; const ox=oc.getContext('2d'); const out=ox.createImageData(ow,oh), op=out.data;
+  const Hm=homografia([[0,0],[ow,0],[ow,oh],[0,oh]],q);
+  for(let y=0;y<oh;y++){ const yy=y+.5; for(let X=0;X<ow;X++){ const xx=X+.5, z=Hm[6]*xx+Hm[7]*yy+1; let u=(Hm[0]*xx+Hm[1]*yy+Hm[2])/z-.5, v=(Hm[3]*xx+Hm[4]*yy+Hm[5])/z-.5;
+      if(u<0)u=0; if(v<0)v=0; if(u>W0-1.001)u=W0-1.001; if(v>H0-1.001)v=H0-1.001; const x0=u|0,y0=v|0,fx=u-x0,fy=v-y0, i00=(y0*W0+x0)*4, i10=i00+4, i01=i00+W0*4, i11=i01+4, o=(y*ow+X)*4;
+      for(let ch=0;ch<3;ch++) op[o+ch]=(sp[i00+ch]*(1-fx)+sp[i10+ch]*fx)*(1-fy)+(sp[i01+ch]*(1-fx)+sp[i11+ch]*fx)*fy; op[o+3]=255; } }
+  if(mejorar) mejorarScan(out,ow,oh);
+  ox.putImageData(out,0,0); return oc; }
+/* quita sombras y deja el papel blanco y la tinta oscura, sin perder sellos de color */
+function mejorarScan(img,w,h){
+  const p=img.data, bw=Math.max(4,Math.round(w/24)), bh=Math.max(4,Math.round(h/24)), cs=bw*bh;
+  // brillo del papel por bloque: percentil alto (ignora la tinta)
+  const bg=new Float32Array(cs), cellW=w/bw, cellH=h/bh;
+  for(let by=0;by<bh;by++) for(let bx=0;bx<bw;bx++){ const hs=new Uint16Array(256); let n=0; const x1=Math.floor(bx*cellW),x2=Math.floor((bx+1)*cellW),y1=Math.floor(by*cellH),y2=Math.floor((by+1)*cellH);
+    for(let y=y1;y<y2;y+=2) for(let x=x1;x<x2;x+=2){ const i=(y*w+x)*4; hs[(.299*p[i]+.587*p[i+1]+.114*p[i+2])|0]++; n++; }
+    let acc=0,t=255; for(let v=255;v>=0;v--){ acc+=hs[v]; if(acc>=n*.1){t=v;break;} } bg[by*bw+bx]=Math.max(40,t); }
+  // suavizar el mapa de fondo
+  for(let pass=0;pass<2;pass++){ const c=bg.slice(); for(let y=0;y<bh;y++) for(let x=0;x<bw;x++){ let s=0,n=0; for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){ const X=x+dx,Y=y+dy; if(X>=0&&Y>=0&&X<bw&&Y<bh){ s+=c[Y*bw+X]; n++; } } bg[y*bw+x]=s/n; } }
+  const B=(x,y)=>{ let gx=x/cellW-.5, gy=y/cellH-.5; if(gx<0)gx=0; if(gy<0)gy=0; if(gx>bw-1)gx=bw-1; if(gy>bh-1)gy=bh-1; const x0=Math.floor(gx),y0=Math.floor(gy),x1=Math.min(bw-1,x0+1),y1=Math.min(bh-1,y0+1),fx=gx-x0,fy=gy-y0;
+    return (bg[y0*bw+x0]*(1-fx)+bg[y0*bw+x1]*fx)*(1-fy)+(bg[y1*bw+x0]*(1-fx)+bg[y1*bw+x1]*fx)*fy; };
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=(y*w+x)*4, f=255/B(x,y);
+    for(let ch=0;ch<3;ch++){ let v=p[i+ch]*f; v=(v-55)*1.32; v=v<0?0:v>255?255:v; p[i+ch]=v>238?255:v; } }
+}
+async function blobDeCanvas(c,q=.82){ return await new Promise(r=>c.toBlob(r,'image/jpeg',q)); }
+async function bitmapDe(blob,max=2400){ const url=URL.createObjectURL(blob); try{ const img=await loadImg(url); const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)); const c=document.createElement('canvas'); c.width=Math.round(img.naturalWidth*s); c.height=Math.round(img.naturalHeight*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; } finally{ URL.revokeObjectURL(url); } }
+const QUAD_TODO=[[0,0],[1,0],[1,1],[0,1]];
+/* aplica el escaneo con las esquinas y el modo guardados en W */
+async function aplicarScan(){ const c=W.origC; let out;
+  if(W.scanModo==='original') out=c; else out=enderezar(c,W.quad||QUAD_TODO,true);
+  const blob=await blobDeCanvas(out); if(W.fotoUrl) URL.revokeObjectURL(W.fotoUrl); W.foto=blob; W.fotoUrl=URL.createObjectURL(blob); W.fotoChanged=true; }
+/* editor de bordes: 4 puntos que se arrastran */
+function abrirBordes(){ if(!W||!W.origC) return; W.qEdit=(W.quad||QUAD_TODO).map(p=>p.slice()); const url=W.origC.toDataURL('image/jpeg',.7);
+  $('#layer').insertAdjacentHTML('beforeend',`<div class="crop" id="crop" role="dialog" aria-modal="true" aria-label="Ajustar bordes"><div class="crop-top"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">Ajusta las esquinas</b><button class="link" style="color:#fff" data-act="crop-x">Cancelar</button></div><span>Arrastra los puntos a las esquinas de la hoja</span></div>
+    <div class="crop-stage"><div class="crop-img" id="crop-img"><img src="${url}" alt=""><svg id="crop-svg" viewBox="0 0 1 1" preserveAspectRatio="none"><polygon id="crop-poly" points=""/></svg>${[0,1,2,3].map(i=>`<button class="crop-h" data-h="${i}" aria-label="Esquina ${i+1}"></button>`).join('')}</div></div>
+    <div class="crop-foot"><button class="btn btn-ghost" data-act="crop-todo">Toda la foto</button><button class="btn btn-ghost" data-act="crop-auto">Automático</button><button class="btn btn-primary" data-act="crop-ok">Listo</button></div></div>`);
+  const box=$('#crop-img'), img=box.querySelector('img'); const fit=()=>{ const st=$('.crop-stage').getBoundingClientRect(), r=W.origC.width/W.origC.height; let bw=st.width-28, bh=bw/r; if(bh>st.height-28){ bh=st.height-28; bw=bh*r; } box.style.width=bw+'px'; box.style.height=bh+'px'; dibujarBordes(); };
+  img.onload=fit; setTimeout(fit,30);
+  let drag=-1; box.addEventListener('pointerdown',e=>{ const hd=e.target.closest('.crop-h'); const r=box.getBoundingClientRect(); const pt=[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height];
+    drag= hd? +hd.dataset.h : W.qEdit.map((q,i)=>[Math.hypot(q[0]-pt[0],q[1]-pt[1]),i]).sort((a,b)=>a[0]-b[0])[0][1]; box.setPointerCapture(e.pointerId); e.preventDefault(); });
+  box.addEventListener('pointermove',e=>{ if(drag<0) return; const r=box.getBoundingClientRect(); W.qEdit[drag]=[Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))]; dibujarBordes(); });
+  const fin=()=>{drag=-1;}; box.addEventListener('pointerup',fin); box.addEventListener('pointercancel',fin); }
+function dibujarBordes(){ const q=W&&W.qEdit; if(!q) return; $('#crop-poly')?.setAttribute('points',q.map(p=>p.join(',')).join(' ')); document.querySelectorAll('.crop-h').forEach((h,i)=>{ h.style.left=(q[i][0]*100)+'%'; h.style.top=(q[i][1]*100)+'%'; }); }
+async function cerrarBordes(ok){ const el=$('#crop'); if(ok){ W.quad=W.qEdit; W.scanModo='mejorada'; toast('Enderezando…'); await aplicarScan(); $('.toast').hidden=true; } el&&el.remove(); W.qEdit=null; renderWz(); if(ok) autoLeer(true); }
+
+/* ---------- lectura de la factura: Claude (con internet) o Tesseract (sin internet) ---------- */
+function conocidos(){ const by={}; for(const m of S.movs){ if(!m.beneficiario||m.persona||m.tipo!=='gasto') continue; const k=m.beneficiario; (by[k]=by[k]||[]).push(m); } return by; }
+function masComun(list,campo){ const c={}; list.forEach(m=>{ if(m[campo]) c[m[campo]]=(c[m[campo]]||0)+1; }); const b=Object.entries(c).sort((a,b)=>b[1]-a[1])[0]; return b?b[0]:''; }
+function bigramas(s){ s=nrm(s).replace(/[^a-z0-9ñ]+/g,' ').trim(); const o=new Map(); for(let i=0;i<s.length-1;i++){ const g=s.slice(i,i+2); o.set(g,(o.get(g)||0)+1); } return o; }
+function parecido(a,b){ const A=bigramas(a),B=bigramas(b); let na=0,nb=0,inter=0; A.forEach(v=>na+=v); B.forEach(v=>nb+=v); A.forEach((v,g)=>{ if(B.has(g)) inter+=Math.min(v,B.get(g)); }); return na+nb?2*inter/(na+nb):0; }
+/* usa lo que ya registraste antes (mismo RUC o mismo local) para completar y escribirlo igual que siempre */
+function completarConHistorial(out,texto){
+  const by=conocidos(); let hist=null;
+  if(out.ruc){ const m=S.movs.filter(x=>x.ruc===out.ruc&&x.beneficiario); if(m.length) hist=m; }
+  if(!hist){ const cands=[out.beneficiario||'',...String(texto||'').toUpperCase().split('\n').slice(0,12)].map(s=>s.trim()).filter(s=>s.length>=4);
+    let best=0,bk=null; for(const k of Object.keys(by)) for(const c of cands){ const p=parecido(k,c); if(p>best){best=p;bk=k;} }
+    if(bk && best>=.72) hist=by[bk]; }
+  if(hist){ const ult=hist.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))[0];
+    out.beneficiario=ult.beneficiario; if(!out.lugar) out.lugar=masComun(hist,'lugar');
+    const hc=masComun(hist,'categoria'), kw=out.detalle?adivinarCat(out.detalle.toUpperCase()):''; if(hc && CAT[hc] && !CAT[hc].oculta && (hist.filter(m=>m.categoria===hc).length>=2 || (!out.categoria && !kw))) out.categoria=hc;
+    if(!out.detalle){ const hd=masComun(hist,'detalle'); if(hd) out.detalle=hd; } out._hist=true; }
+  if(!out.categoria) out.categoria=adivinarCat(((out.detalle||'')+' '+(out.beneficiario||'')+' '+(texto||'')).toUpperCase());
+  return out; }
+const LEER_SYS=`Lees fotos de facturas, notas de venta y tickets de compra de Ecuador para la caja chica de una obra de construcción. Devuelve los datos con la herramienta registrar_factura.
+Reglas:
+- beneficiario es quien VENDE (el emisor de la factura, razón social o nombre comercial), nunca el cliente ni el consorcio que compra.
+- factura con el formato 001-001-000000123 (establecimiento-punto-secuencial de 9 dígitos).
+- valor es el TOTAL a pagar (con IVA), en dólares.
+- detalle: qué se compró, corto, en mayúsculas, como se anota en una hoja de caja chica (ej.: DIESEL, GASOLINA, ALAMBRE #18, CEMENTO, ALMUERZOS, AGUA). Si hay muchos productos, el principal o un resumen de máximo 40 caracteres.
+- lugar: ciudad, parroquia o sector corto donde está el local, en mayúsculas.
+- Deja vacío lo que no se lea con seguridad. No inventes.`;
+async function leerConClaude(blob){
+  const sm=await compress(blob,1600,.85), b64=(await blobToDataURL(sm.blob)).split(',')[1];
+  const by=conocidos(), conoc=Object.entries(by).sort((a,b)=>b[1].length-a[1].length).slice(0,40).map(([k,l])=>`- ${k} | lugar: ${masComun(l,'lugar')||'—'} | categoría: ${masComun(l,'categoria')||'—'} | detalle usual: ${masComun(l,'detalle')||'—'}`).join('\n');
+  const cats=visibleCats();
+  const tool={name:'registrar_factura',description:'Registra los datos leídos de la foto.',strict:true,input_schema:{type:'object',additionalProperties:false,
+    required:['es_factura','factura','fecha','ruc','beneficiario','lugar','detalle','valor','pago','categoria'],properties:{
+    es_factura:{type:'boolean',description:'true si la foto es una factura, nota de venta o ticket de compra'},
+    factura:{type:'string',description:'Número de factura 001-001-000000123, o vacío'},
+    fecha:{type:'string',description:'Fecha de emisión en formato AAAA-MM-DD, o vacío'},
+    ruc:{type:'string',description:'RUC del emisor (13 dígitos), o vacío'},
+    beneficiario:{type:'string',description:'Emisor (quien vende) en mayúsculas'},
+    lugar:{type:'string',description:'Ciudad o sector en mayúsculas, o vacío'},
+    detalle:{type:'string',description:'Qué se compró, corto y en mayúsculas'},
+    valor:{type:'number',description:'Total a pagar en USD, 0 si no se ve'},
+    pago:{type:'string',enum:['EFECTIVO','TRANSFERENCIA','CHEQUE',''],description:'Forma de pago si aparece en la factura'},
+    categoria:{type:'string',enum:cats.map(c=>c.id).concat(['']),description:'Categoría de gasto: '+cats.map(c=>c.id+' = '+c.n).join('; ')}}}};
+  const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),60000);
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctl.signal,headers:{'content-type':'application/json','x-api-key':getKey(),'anthropic-version':'2026-10-21','anthropic-beta':'server-side-fallback-2026-07-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-opus-5-5',max_tokens:2000,fallbacks:'default',system:LEER_SYS,tools:[tool],tool_choice:{type:'tool',name:'registrar_factura'},
+        messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},{type:'text',text:`Hoy es ${todayISO()}.${conoc?`\nLocales donde ya compró antes (si el emisor es uno de estos, escribe el beneficiario exactamente igual y usa su lugar y categoría si encajan):\n${conoc}`:''}\nLee esta foto.`}]}]})});
+    if(!res.ok){ const e=new Error('HTTP '+res.status); e.status=res.status; throw e; }
+    const j=await res.json(); const tu=(j.content||[]).find(b=>b.type==='tool_use'); if(!tu) throw new Error('sin datos');
+    const r=tu.input||{}; const out={};
+    if(r.factura){ const f=String(r.factura).match(/(\d{3})\D*(\d{3})\D*(\d{1,9})/); out.factura=f?`${f[1]}-${f[2]}-${f[3].padStart(9,'0')}`:fmtFactura(r.factura); } if(/^\d{4}-\d{2}-\d{2}$/.test(r.fecha||'') && r.fecha<=todayISO()) out.fecha=r.fecha;
+    if(/^\d{10,13}$/.test(r.ruc||'')) out.ruc=r.ruc; for(const k of ['beneficiario','lugar','detalle']) if(r[k]) out[k]=String(r[k]).toUpperCase().trim().slice(0,60);
+    if(r.valor>0) out.valor=r2(r.valor); if(r.pago) out.pago=r.pago; if(r.categoria && CAT[r.categoria]) out.categoria=r.categoria;
+    out._texto=[r.beneficiario,r.ruc&&'RUC '+r.ruc,r.factura&&'FACTURA '+r.factura,r.fecha,r.detalle,r.lugar,r.valor&&'TOTAL '+r.valor].filter(Boolean).join('\n');
+    out._noFactura=r.es_factura===false; return out;
+  } finally{ clearTimeout(to); } }
+/* después de leer: saltar al paso de revisar, o al primero que falte */
+function autoAvanzar(yo){ if(W!==yo || steps()[W.step]!=='foto' || !W.fotoUrl) return; const STEPS=steps(), faltan=[];
+  if(!(parseMonto(W.d.valor)>0)) faltan.push('el valor'); if(!W.d.categoria) faltan.push('la categoría'); if(!W.d.detalle.trim()) faltan.push('qué compraste');
+  let dest=STEPS.length-1; for(let i=1;i<STEPS.length;i++){ W.step=i; if(wzValid()){ dest=i; break; } } W.step=dest;
+  W.aviso={step:dest, ok:!faltan.length, txt: faltan.length?`Leí casi todo de la foto. Me faltó ${faltan.join(' y ')}: complétalo aquí.`:`Leí todo de la foto. Revisa que esté bien y toca <b>Guardar gasto</b>.`}; }
 
 /* ---------- fondo de la tarjeta de saldo ---------- */
 const WEB_SVG=(()=>{ const c=160, R=[28,58,90,124,160], n=12; let p='';
@@ -1120,7 +1294,11 @@ async function compress(blob,max=1600,q=.78){
     const c=document.createElement('canvas'); c.width=Math.round(img.naturalWidth*s); c.height=Math.round(img.naturalHeight*s);
     c.getContext('2d').drawImage(img,0,0,c.width,c.height); const out=await new Promise(r=>c.toBlob(r,'image/jpeg',q)); return {blob:out||blob,w:c.width,h:c.height};
   } finally { URL.revokeObjectURL(url); } }
-async function onFoto(file){ if(!file||!W) return; if(W.photoT==='comp') return onComp(file); toast('Procesando foto…'); try{ const r=await compress(file); if(W.fotoUrl) URL.revokeObjectURL(W.fotoUrl); W.foto=r.blob; W.fotoUrl=URL.createObjectURL(r.blob); W.fotoChanged=true; renderWz(); $('.toast').hidden=true; if(W.mode==='factura') autoLeer(); }catch(e){ toast('No se pudo leer esa imagen. Prueba con otra.'); } }
+async function onFoto(file){ if(!file||!W) return; if(W.photoT==='comp') return onComp(file);
+  if(W.mode!=='factura'){ toast('Procesando foto…'); try{ const r=await compress(file); if(W.fotoUrl) URL.revokeObjectURL(W.fotoUrl); W.foto=r.blob; W.fotoUrl=URL.createObjectURL(r.blob); W.fotoChanged=true; renderWz(); $('.toast').hidden=true; }catch(e){ toast('No se pudo leer esa imagen. Prueba con otra.'); } return; }
+  toast('Buscando la hoja…'); const yo=W;
+  try{ const c=await bitmapDe(file,2400); if(W!==yo) return; W.origC=c; await new Promise(r=>setTimeout(r,20)); const q=detectarHoja(c); W.quad=q; W.bordes=q?'ok':'no'; W.scanModo='mejorada'; W.aviso=null;
+    await aplicarScan(); renderWz(); $('.toast').hidden=true; autoLeer(); }catch(e){ console.warn(e); toast('No se pudo leer esa imagen. Prueba con otra.'); } }
 
 /* ---------- detalle ---------- */
 async function verMov(id){
@@ -1287,7 +1465,7 @@ document.addEventListener('click',async e=>{
   switch(a){
     case 'view': S.view=b.dataset.v; S.cat=null; render(); scrollTo(0,0); if(S.view==='mas') showStorage(); if(S.view==='asistente'){ cargarThumbs(); setTimeout(()=>scrollTo(0,document.body.scrollHeight),30); } break;
     case 'nuevo-gasto': elegirTipo(); break;
-    case 'nuevo-factura': nuevoGasto('factura'); break;
+    case 'nuevo-factura': nuevoGasto('factura'); W.photoT='fact'; $('#f-cam').click(); break;
     case 'voz': abrirVoz(); break;
     case 'fondo': abrirFondo(); break;
     case 'fondo-set': store.set('bal',{...store.get('bal',{}),tipo:b.dataset.t}); closeLayer(); render(); toast('Fondo cambiado'); break;
@@ -1302,7 +1480,13 @@ document.addEventListener('click',async e=>{
     case 'nuevo-persona': nuevoGasto('persona'); break;
     case 'w-persona': W.d.beneficiario=b.dataset.v; renderWz(); break;
     case 'w-motivo': { const mo=MOTIVOS.find(x=>x[0]===b.dataset.v); W.d.detalle=mo[0]; if(mo[1] && CAT[mo[1]] && (!W.d.categoria||MOTIVOS.some(x=>x[1]===W.d.categoria))) W.d.categoria=mo[1]; renderWz(); if(mo[0]==='OTRO') setTimeout(()=>$('#w-detalle')?.focus(),60); break; }
-    case 'releer': autoLeer(true); break;
+    case 'releer': W.aviso=null; autoLeer(true); break;
+    case 'bordes': if(!W.origC && W.foto){ W.origC=await bitmapDe(W.foto,2400); W.quad=null; } abrirBordes(); break;
+    case 'crop-todo': W.qEdit=QUAD_TODO.map(p=>p.slice()); dibujarBordes(); break;
+    case 'crop-auto': { const q=detectarHoja(W.origC); if(q){ W.qEdit=q; dibujarBordes(); } else toast('No encontré la hoja. Muévelos a mano.'); break; }
+    case 'crop-ok': await cerrarBordes(true); break;
+    case 'crop-x': await cerrarBordes(false); break;
+    case 'scan-modo': W.scanModo=W.scanModo==='original'?'mejorada':'original'; await aplicarScan(); renderWz(); break;
     case 'cats': catsSheet(); break;
     case 'cat-new': formCat(null); break;
     case 'cat-edit': formCat(CAT[b.dataset.id]); break;
@@ -1333,8 +1517,8 @@ document.addEventListener('click',async e=>{
     case 'w-fecha': W.d.fecha=todayISO(+b.dataset.v); renderWz(); break;
     case 'w-pago': W.d.pago=b.dataset.p; renderWz(); break;
     case 'w-next': { const err=wzValid(); if(err){ $('#w-err').textContent=err; return; } W.step++; renderWz(); break; }
-    case 'w-back': W.step--; renderWz(); break;
-    case 'w-go': W.step=+b.dataset.s; renderWz(); break;
+    case 'w-back': W.step--; W.aviso=null; renderWz(); break;
+    case 'w-go': W.step=+b.dataset.s; W.aviso=null; renderWz(); break;
     case 'w-save': b.disabled=true; await wzSave(); break;
     case 'ver': verMov(b.dataset.id); break;
     case 'zoom': { const v=document.createElement('div'); v.className='viewer'; v.innerHTML=`<img src="${b.dataset.src}" alt="Factura"><button class="x" aria-label="Cerrar">${svg(UI.x)}</button>`;
