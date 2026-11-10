@@ -381,6 +381,7 @@ const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const fmtM = new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD',minimumFractionDigits:2});
 const money = v => fmtM.format(Math.round((v||0)*100)/100);
 const r2 = v => Math.round(v*100)/100;
+function horaAhora(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 function todayISO(off=0){const d=new Date();d.setDate(d.getDate()+off);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 const parseISO = s => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
 const DIAS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'], MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -501,7 +502,7 @@ function rowHTML(m){
   const qd=S.q.replace(/\D/g,''); if(m.numero && qd.length>=3 && String(m.numero).replace(/\D/g,'').includes(qd)) sub=`${m.pago==='CHEQUE'?'Cheque':'Transf.'} n.º ${m.numero} · `+sub;
   return `<button class="row" data-act="ver" data-id="${m.id}">
     ${ing?`<span class="ico" style="--c:var(--good)">${svg(IC.INGRESO)}</span>`:catIcon(m.categoria)}
-    <div class="mid"><div class="t">${esc(m.detalle||'Sin detalle')}</div><div class="s">${esc(sub)}</div></div>
+    <div class="mid"><div class="t">${esc((m.detalle||'Sin detalle').replace(/\n+/g,' · '))}</div><div class="s">${esc(sub)}</div></div>
     <div class="amt"><b class="num ${ing?'in':''}">${m.pendiente&&!m.valor?'$ ?':(ing?'+':'−')+money(m.valor)}</b>
       ${ing?'':m.pendiente?`<span class="tag warn">${svg(UI.mic)}Pendiente</span>`:m.persona?`<span class="tag person">${svg(UI.person)}Persona</span>`:(m.fotoId?`<span class="tag">${svg(UI.cam)}${m.pago==='EFECTIVO'?'Efectivo':cap(m.pago)}</span>`:`<span class="tag warn">${svg(UI.nophoto)}Sin foto</span>`)}</div></button>`;
 }
@@ -604,7 +605,7 @@ function elegirTipo(){ openLayer(`${sheetHead('¿Qué vas a registrar?')}<div cl
   <button class="pay" data-act="nuevo-factura"><span class="ico" style="--c:var(--accent)">${svg(UI.scan)}</span><div><div>Compra con factura</div><small>Solo toma la foto: recorta la hoja y llena todo</small></div></button>
   <button class="pay" data-act="voz"><span class="ico" style="--c:var(--bad)">${svg(UI.mic)}</span><div><div>Nota de voz</div><small>Dilo ahora y complétalo después con la foto</small></div></button>
   <button class="pay" data-act="nuevo-persona"><span class="ico" style="--c:var(--ink)">${svg(UI.person)}</span><div><div>Pago a una persona</div><small>Adelantos, comida, jornales. Sin factura.</small></div></button></div>`); }
-function nuevoGasto(mode='factura'){ W={mode,step:0,isNew:true,d:{tipo:'gasto',fecha:todayISO(),pago:'EFECTIVO',valor:'',categoria:'',detalle:'',lugar:'',beneficiario:'',factura:'',numero:''},foto:null,fotoUrl:null,fotoChanged:false,comp:null,compUrl:null,compChanged:false,auto:new Set(),ocr:null,ocrC:null}; renderWz(); }
+function nuevoGasto(mode='factura'){ W={mode,step:0,isNew:true,d:{tipo:'gasto',fecha:todayISO(),hora:horaAhora(),pago:'EFECTIVO',valor:'',categoria:'',detalle:'',lugar:'',beneficiario:'',factura:'',numero:''},foto:null,fotoUrl:null,fotoChanged:false,comp:null,compUrl:null,compChanged:false,auto:new Set(),ocr:null,ocrC:null}; renderWz(); }
 async function editarGasto(m){ W={mode:m.persona?'persona':'factura',isNew:false,id:m.id,d:{...m,valor:String(m.valor).replace('.',',')},foto:null,fotoUrl:null,fotoChanged:false,comp:null,compUrl:null,compChanged:false,auto:new Set(),ocr:null,ocrC:null}; W.step=steps().length-1;
   if(m.compId){ const f=await DB.get('fotos',m.compId); if(f){W.comp=f.blob;W.compUrl=URL.createObjectURL(f.blob);} }
   if(m.audioId){ const f=await DB.get('fotos',m.audioId); if(f) W.audioUrl=URL.createObjectURL(f.blob); }
@@ -619,7 +620,7 @@ function renderWz(){
     <div class="photo-box">${W.fotoUrl?`<img src="${W.fotoUrl}" alt="Foto de la factura">`:`<div class="photo-ph">${svg(UI.cam)}<span>Aún no hay foto</span></div>`}</div>
     <div class="two"><button class="btn btn-primary" data-act="cam">${svg(UI.cam).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}${W.fotoUrl?'Otra foto':'Tomar foto'}</button>
     <button class="btn btn-ghost" data-act="gal">${svg(UI.img).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Galería</button></div>
-    ${W.fotoUrl?`<div class="scanbar">${W.bordes==='ok'?`<span class="autolbl">${svg('<path d="m5 12 5 5 9-10"/>').replace('<svg','<svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.6;vertical-align:-2px"')} Hoja recortada y mejorada</span>`:W.bordes==='no'?`<span class="note" style="margin:0">No encontré bien los bordes. Ajústalos si quieres.</span>`:''}
+    ${W.fotoUrl?`<div class="scanbar">${W.bordes==='ok'?`<span class="autolbl">${svg('<path d="m5 12 5 5 9-10"/>').replace('<svg','<svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.6;vertical-align:-2px"')} Hoja recortada y mejorada</span>`:W.bordes==='aprox'?`<span class="note" style="margin:0">Recorté alrededor de la factura. Si quieres, ajusta las esquinas.</span>`:W.bordes==='no'?`<span class="note" style="margin:0">Usé la foto completa mejorada. Si quieres recortarla, toca Ajustar bordes.</span>`:''}
       <button class="chip" data-act="bordes">Ajustar bordes</button>${W.origC?`<button class="chip ${W.scanModo==='original'?'on':''}" data-act="scan-modo">${W.scanModo==='original'?'Ver escaneada':'Ver original'}</button>`:''}</div>`:''}
     ${ocrHTML()}
     ${W.fotoUrl?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button class="link" data-act="quitar-foto">Quitar foto</button>${W.ocr&&W.ocr.estado!=='leyendo'?`<button class="link" data-act="releer">Leer otra vez</button>`:''}${W.ocr&&W.ocr.estado==='listo'&&W.ocr.campos.length?`<button class="link" data-act="w-go" data-s="${steps().length-1}">Ir a revisar</button>`:''}</div>`:''}`;
@@ -630,7 +631,7 @@ function renderWz(){
     <div class="field"><label>¿Para qué?</label><div class="chips">${MOTIVOS.map(([m])=>`<button class="chip ${d.detalle===m?'on':''}" data-act="w-motivo" data-v="${m}">${cap(m)}</button>`).join('')}</div>
     <input class="inp" id="w-detalle" data-f="detalle" placeholder="Escribe el motivo" value="${esc(d.detalle==='OTRO'?'':d.detalle)}" autocapitalize="characters" style="margin-top:6px" aria-label="Motivo"></div>`; }
   if(st==='cuando') body=`<div class="q">¿Cuándo y cómo se lo diste?</div>
-    <div class="field"><label for="w-fecha">Fecha</label><input class="inp" type="date" id="w-fecha" data-f="fecha" value="${esc(d.fecha)}" max="${todayISO()}">
+    <div class="field"><label for="w-fecha">Fecha y hora</label><div style="display:flex;gap:8px"><input class="inp" style="flex:1.6" type="date" id="w-fecha" data-f="fecha" value="${esc(d.fecha)}" max="${todayISO()}"><input class="inp" style="flex:1" type="time" id="w-hora" data-f="hora" value="${esc(d.hora||'')}" aria-label="Hora"></div>
     <div class="chips" style="margin-top:4px"><button class="chip ${d.fecha===todayISO()?'on':''}" data-act="w-fecha" data-v="0">Hoy</button><button class="chip ${d.fecha===todayISO(-1)?'on':''}" data-act="w-fecha" data-v="-1">Ayer</button><button class="chip ${d.fecha===todayISO(-2)?'on':''}" data-act="w-fecha" data-v="-2">Anteayer</button></div></div>
     <div class="field"><label>Forma de pago</label><div class="chips">${PAGOS.map(p=>`<button class="chip ${d.pago===p.id?'on':''}" data-act="w-pago" data-p="${p.id}">${p.n}</button>`).join('')}</div></div>
     ${d.pago!=='EFECTIVO'?compHTML():''}
@@ -643,12 +644,12 @@ function renderWz(){
     <div class="cat-grid">${visibleCats().map(c=>`<button class="cat-opt ${d.categoria===c.id?'on':''}" style="--c:${c.c}" data-act="w-cat" data-c="${c.id}">${catIcon(c.id)}${esc(c.n)}</button>`).join('')}
     <button class="cat-opt" style="--c:var(--muted);border-style:dashed" data-act="cat-new"><span class="ico" style="--c:var(--muted)">${svg(UI.plus)}</span>Nueva</button></div>`;
   if(st==='detalle') body=`<div class="q">¿Qué compraste y a quién?</div><p class="hint">${W.auto.size?'<span class="autolbl">Los campos en verde se leyeron de la foto. Corrígelos si hace falta.</span>':'Escribe como en tu hoja. Te sugiero lo que ya has usado.'}</p>
-    <div class="field"><label for="w-detalle">Detalle</label><input class="inp ${au('detalle')}" id="w-detalle" data-f="detalle" list="dl-det" placeholder="Ej.: DIESEL, ALAMBRE #18, ALMUERZO" value="${esc(d.detalle)}" autocapitalize="characters">${dl('dl-det','detalle')}</div>
+    <div class="field"><label for="w-detalle">Detalle <small style="font-weight:500">(un producto por línea)</small></label><textarea class="inp ${au('detalle')}" id="w-detalle" data-f="detalle" rows="${Math.min(8,Math.max(3,(d.detalle||'').split('\n').length+1))}" placeholder="Ej.:&#10;CEMENTO HOLCIM 50KG&#10;CLAVOS 2 PULG" autocapitalize="characters" style="resize:vertical;line-height:1.4">${esc(d.detalle)}</textarea></div>
     <div class="field"><label for="w-benef">Beneficiario</label><input class="inp ${au('beneficiario')}" id="w-benef" data-f="beneficiario" list="dl-ben" placeholder="Nombre o razón social de la factura" value="${esc(d.beneficiario)}" autocapitalize="characters">${dl('dl-ben','beneficiario')}</div>
     <div class="field"><label for="w-lugar">¿Dónde lo compraste?</label><input class="inp ${au('lugar')}" id="w-lugar" data-f="lugar" list="dl-lug" placeholder="Ej.: KM 24, ARCHIDONA, MERCADO TENA" value="${esc(d.lugar)}" autocapitalize="characters">${dl('dl-lug','lugar')}</div>`;
-  if(st==='factura') body=`<div class="q">Factura y fecha</div>
+  if(st==='factura') body=`<div class="q">Factura, fecha y hora</div>
     <div class="field"><label for="w-fact">Número de factura</label><input class="inp num ${au('factura')}" id="w-fact" data-f="factura" inputmode="numeric" placeholder="001-001-000000123" value="${esc(d.factura)}"><small>Escribe solo los números, los guiones se ponen solos. Déjalo vacío si no te dieron factura.</small></div>
-    <div class="field"><label for="w-fecha">Fecha del gasto</label><input class="inp ${au('fecha')}" type="date" id="w-fecha" data-f="fecha" value="${esc(d.fecha)}" max="${todayISO()}">
+    <div class="field"><label for="w-fecha">Fecha y hora del gasto</label><div style="display:flex;gap:8px"><input class="inp ${au('fecha')}" style="flex:1.6" type="date" id="w-fecha" data-f="fecha" value="${esc(d.fecha)}" max="${todayISO()}"><input class="inp ${au('hora')}" style="flex:1" type="time" id="w-hora" data-f="hora" value="${esc(d.hora||'')}" aria-label="Hora"></div>
     <div class="chips" style="margin-top:4px"><button class="chip ${d.fecha===todayISO()?'on':''}" data-act="w-fecha" data-v="0">Hoy</button><button class="chip ${d.fecha===todayISO(-1)?'on':''}" data-act="w-fecha" data-v="-1">Ayer</button><button class="chip ${d.fecha===todayISO(-2)?'on':''}" data-act="w-fecha" data-v="-2">Anteayer</button></div></div>`;
   if(st==='pago') body=`<div class="q">¿Cómo pagaste?</div><p class="hint">&nbsp;</p>
     <div class="pay-opts">${PAGOS.map(p=>`<button class="pay ${d.pago===p.id?'on':''}" data-act="w-pago" data-p="${p.id}">${svg(p.i)}${p.n}</button>`).join('')}</div>
@@ -660,18 +661,18 @@ function renderWz(){
       <div class="rv"><span>Motivo</span><b>${esc(d.detalle||'—')}${ed(0)}</b></div>
       <div class="rv"><span>Valor</span><b class="num">${money(parseMonto(d.valor))}${ed(1)}</b></div>
       <div class="rv"><span>Categoría</span><b>${esc(c?.n||'—')}${ed(1)}</b></div>
-      <div class="rv"><span>Fecha</span><b>${fmtDate(d.fecha)}${ed(2)}</b></div>
+      <div class="rv"><span>Fecha</span><b>${fmtDate(d.fecha)}${d.hora?' · '+esc(d.hora):''}${ed(2)}</b></div>
       <div class="rv"><span>Pago</span><b>${cap(d.pago)}${d.numero&&d.pago!=='EFECTIVO'?' · '+esc(d.numero):''}${W.compUrl&&d.pago!=='EFECTIVO'?' · con foto':''}${ed(2)}</b></div></div>`; }
   else if(st==='revisar'){ const c=CAT[d.categoria]; const ed=i=>`<button class="edit" data-act="w-go" data-s="${i}">Cambiar</button>`;
     body=`<div class="q">Revisa y guarda</div><p class="hint">Se guarda en <b style="color:var(--ink)">${esc(obra().nombre)}</b>.</p>
     <div class="review">${W.fotoUrl?`<img class="thumb" src="${W.fotoUrl}" alt="Factura">`:`<div class="rv"><span class="tag warn">${svg(UI.nophoto)}Sin foto de factura</span>${ed(0)}</div>`}
       <div class="rv"><span>Valor</span><b class="num">${money(parseMonto(d.valor))}${ed(1)}</b></div>
       <div class="rv"><span>Categoría</span><b>${esc(c?.n||'—')}${ed(1)}</b></div>
-      <div class="rv"><span>Detalle</span><b>${esc(d.detalle||'—')}${ed(2)}</b></div>
+      <div class="rv"><span>Detalle</span><b>${esc(d.detalle||'—').replace(/\n/g,'<br>')}${ed(2)}</b></div>
       <div class="rv"><span>Beneficiario</span><b>${esc(d.beneficiario||'—')}${ed(2)}</b></div>
       <div class="rv"><span>Lugar</span><b>${esc(d.lugar||'—')}${ed(2)}</b></div>
       <div class="rv"><span>Factura</span><b class="num">${esc(d.factura||'Sin factura')}${ed(3)}</b></div>
-      <div class="rv"><span>Fecha</span><b>${fmtDate(d.fecha)}${ed(3)}</b></div>
+      <div class="rv"><span>Fecha</span><b>${fmtDate(d.fecha)}${d.hora?' · '+esc(d.hora):''}${ed(3)}</b></div>
       <div class="rv"><span>Pago</span><b>${cap(d.pago)}${d.numero&&d.pago!=='EFECTIVO'?' · '+esc(d.numero):''}${W.compUrl&&d.pago!=='EFECTIVO'?' · con foto':''}${ed(4)}</b></div></div>`; }
   const last=W.step===STEPS.length-1;
   const skip = st==='foto' && !W.fotoUrl ? 'No me dieron factura' : 'Siguiente';
@@ -694,7 +695,7 @@ async function wzSave(){
   const STEPS=steps(); for(let i=0;i<STEPS.length;i++){ W.step=i; const e=wzValid(); if(e){ renderWz(); $('#w-err').textContent=e; return; } }
   W.step=STEPS.length-1; const per=W.mode==='persona';
   const d=W.d, prev=W.isNew?null:S.movs.find(m=>m.id===W.id);
-  const m={ id:W.id||uid(), obraId:prev?.obraId||S.obraId, tipo:'gasto', fecha:d.fecha, detalle:d.detalle.trim().toUpperCase(), beneficiario:d.beneficiario.trim().toUpperCase(), lugar:per?'':d.lugar.trim().toUpperCase(),
+  const m={ id:W.id||uid(), obraId:prev?.obraId||S.obraId, tipo:'gasto', fecha:d.fecha, hora:d.hora||'', detalle:d.detalle.split('\n').map(x=>x.trim()).filter(Boolean).join('\n').toUpperCase(), beneficiario:d.beneficiario.trim().toUpperCase(), lugar:per?'':d.lugar.trim().toUpperCase(),
     factura:per?'':d.factura.trim(), ruc:per?'':(d.ruc||prev?.ruc||''), persona:per, pago:d.pago, numero:d.pago==='EFECTIVO'?'':d.numero.trim(), valor:parseMonto(d.valor), categoria:d.categoria, fotoId:prev?.fotoId||null, compId:prev?.compId||null, audioId:prev?.audioId||null, voz:prev?.voz||'', pendiente:false, ocrTexto:W.ocr?.texto??prev?.ocrTexto??'', ocrComp:W.ocrC?.texto??prev?.ocrComp??'', creado:prev?.creado||Date.now(), editado:Date.now() };
   if(d.pago==='EFECTIVO' && W.comp){ W.comp=null; W.compChanged=true; }
   if(W.compChanged){ if(m.compId) await DB.del('fotos',m.compId); m.compId=null; if(W.comp){ m.compId=uid(); await DB.put('fotos',{id:m.compId,blob:W.comp}); } }
@@ -751,7 +752,7 @@ function ocrHTML(){ if(!W||!W.ocr) return ''; const o=W.ocr;
   if(o.estado==='listo' && o.noFact) return `<div class="ocr">Esta foto no parece una factura. Revisa los datos o toma otra.</div>`;
   if(o.estado==='listo') return `<div class="ocr ok" role="status">${svg('<path d="m5 12 5 5 9-10"/>').replace('<svg','<svg style="width:20px;height:20px;stroke:var(--good);fill:none;stroke-width:2.4;flex:none"')}<span>${o.campos.length?`Llené: <b>${o.campos.join(', ')}</b>. Revisa en los siguientes pasos.`:'No pude leer datos claros. Llénalos a mano.'}${o.via==='local'&&!getKey()&&o.campos.length<5?'<br><small style="color:var(--muted)">Con internet y tu clave de Claude (Más → Claude) la lectura es mucho más exacta.</small>':''}</span></div>`;
   return `<div class="ocr">No pude leer la foto. Llena los datos a mano.</div>`; }
-const NOMBRES={valor:'valor',fecha:'fecha',factura:'n.º de factura',beneficiario:'beneficiario',lugar:'lugar',detalle:'detalle',pago:'forma de pago',categoria:'categoría'};
+const NOMBRES={hora:'hora',valor:'valor',fecha:'fecha',factura:'n.º de factura',beneficiario:'beneficiario',lugar:'lugar',detalle:'detalle',pago:'forma de pago',categoria:'categoría'};
 async function autoLeer(forzar=false){
   if(!W||!W.foto) return; const yo=W; const nube=!!getKey() && navigator.onLine;
   yo.ocr={estado:'leyendo',pct:0,campos:[],via:nube?'claude':'local'}; if(forzar){ yo.auto.forEach(k=>{ yo.touched?.delete(k); }); }
@@ -765,32 +766,65 @@ async function autoLeer(forzar=false){
     out=completarConHistorial(out,texto); const campos=[];
     for(const [k,v] of Object.entries(out)){ if(!v||k[0]==='_') continue; if(k==='ruc'){ yo.d.ruc=v; continue; } if(yo.touched&&yo.touched.has(k)) continue; if(k==='categoria' && yo.d.categoria && !yo.auto.has(k)) continue; if(yo.pend && ['detalle','valor','beneficiario'].includes(k) && yo.d[k] && !yo.auto.has(k)) continue;
       yo.d[k]= k==='valor'? String(v.toFixed(2)).replace('.',','): v; yo.auto.add(k); campos.push(NOMBRES[k]); }
+    if(!out.hora && !yo.d.hora) yo.d.hora=horaAhora();
     yo.ocr={estado:'listo',campos,texto,via:yo.ocr.via,noFact:out._noFactura};
     if(campos.length && !out._noFactura) autoAvanzar(yo);
   }catch(e){ console.warn(e); if(W===yo) yo.ocr={estado:'error',campos:[]}; }
   if(W===yo){ const st=steps()[W.step]; const act=document.activeElement; if(st==='foto'||W.aviso||!(act&&act.matches&&act.matches('.wz-body input'))) renderWz(); }
 }
+const TIENDA_RE=/FERRET|TIENDA|MINIMARK|MARKET|MERCADO|GASOLINER|ESTACI[OÓ]N DE SERV|SERVICENTRO|RESTAURANT|COMEDOR|ASADERO|PICANTER|COMERCIAL|DISTRIBUID|BAZAR|PANADER|FARMACIA|BOTICA|SUPERMERC|ALMAC[EÉ]N|DEP[OÓ]SITO|FRIGOR|LUBRICAD|MEC[AÁ]NICA|HOTEL|HOSTAL|PAPELER|AGRO|IMPORTADORA|FERRO|ELECTRIC|VULCANIZ|LAVADORA|CENTRO|MATERIALES|MADERERA|AUTOSERVICIO|KIOSKO|PICANTERIA|CAFETER|PIZZER|POLLER|MARISQ|CARNIC|LICORER|PLASTI|TECNI|SERVICIOS|MULTISERV/;
+const EMPRESA_RE=/\bS\.?\s?A\.?\s?S?\.?$|\bC[IÍ]A\.?\b|\bLTDA\b|\bS\.?\s?A\.?\b|\bE\.?\s?P\.?$|\bCORP|\bCOMPA[ÑN][IÍ]A\b/;
+const STOP_ENC=/RUC|R\.U\.C|FACTURA|DIREC|DIR[.:]|TELF|TEL[EÉ]F|CEL|AUTORIZ|FECHA|CLAVE|AMBIENTE|EMISI|OBLIGAD|CONTRIBUYENTE|MATRIZ|SUCURSAL|N[°º]|NO\.|CLIENTE|EMAIL|CORREO|WWW|HTTP|RIMPE|R[EÉ]GIMEN|AGENTE|NOTA DE VENTA|ESPECIAL|UBICAD|HORA|CAJA|VENDEDOR|TICKET|COMPROBANTE|ELECTR[OÓ]NIC|@/;
+function limpiaTxt(s,max=60){ return s.replace(/[^A-ZÁÉÍÓÚÑÜ0-9 .,#&\/\-]/g,' ').replace(/\s+/g,' ').trim().slice(0,max); }
 function parseFactura(txt){
   const T=txt.toUpperCase().replace(/[|]/g,' '); const out={};
   const lines=T.split('\n').map(l=>l.replace(/\s+/g,' ').trim()).filter(l=>l.length>1);
-  const ru=T.match(/R\.?\s?U\.?\s?C\.?\s*[:.Nº°O]*\s*(\d{13})/)||T.match(/(?<!\d)(\d{10}001)(?!\d)/); if(ru) out.ruc=ru[1];
-  let m=T.match(/(\d{3})\s?[-–.]\s?(\d{3})\s?[-–.]\s?(\d{5,9})/); if(m) out.factura=`${m[1]}-${m[2]}-${m[3].padStart(9,'0')}`;
+  // RUC y clave de acceso (49 dígitos: fecha, tipo, RUC, ambiente, serie, secuencial…)
+  const iCli=lines.findIndex(l=>/CLIENTE|COMPRADOR|SE[ÑN]OR(ES)?:/.test(l)), cab=(iCli>0?lines.slice(0,iCli):lines.slice(0,12)).join('\n');
+  const ru=cab.match(/R\.?\s?U\.?\s?C\.?\s*[:.Nº°O]*\s*(\d{13})/)||cab.match(/(?<!\d)(\d{10}001)(?!\d)/); if(ru) out.ruc=ru[1];
+  const juntos=T.replace(/(?<=\d)[ \t]+(?=\d)/g,''); const cl=juntos.match(/(?<!\d)(\d{49})(?!\d)/);
+  let deClave=null; if(cl){ const k=cl[1], d=+k.slice(0,2), mo=+k.slice(2,4), y=+k.slice(4,8); deClave={factura:`${k.slice(24,27)}-${k.slice(27,30)}-${k.slice(30,39)}`, ruc:k.slice(10,23), fecha:(mo>=1&&mo<=12&&d>=1&&d<=31&&y>=2020)?fechaISO(y,mo,d):''}; if(/^\d{10}001$/.test(deClave.ruc)) out.ruc=deClave.ruc; }
+  // número de factura
+  let fm=null; for(const l of lines){ if(/AUTORIZ|CLAVE|RUC/.test(l)) continue; const x=l.match(/(?<!\d)(\d{3})\s?[-–.]\s?(\d{3})\s?[-–.]\s?(\d{5,9})(?!\d)/); if(x){ fm=x; if(/FACTURA|N[°º.]|NO\b|COMPROBANTE|NOTA/.test(l)) break; } }
+  if(fm) out.factura=`${fm[1]}-${fm[2]}-${fm[3].padStart(9,'0')}`; else if(deClave) out.factura=deClave.factura;
+  // fecha
   const hoy=new Date(); hoy.setHours(23,59);
-  const fechas=[]; for(const x of T.matchAll(/(\d{1,2})\s?[\/\-.]\s?(\d{1,2})\s?[\/\-.]\s?(20\d{2}|\d{2})(?!\d)/g)){ let d=+x[1],mo=+x[2],y=+x[3]; if(y<100)y+=2000; fechas.push([d,mo,y]); }
-  for(const x of T.matchAll(/(20\d{2})\s?[\/\-.]\s?(\d{1,2})\s?[\/\-.]\s?(\d{1,2})(?!\d)/g)) fechas.push([+x[3],+x[2],+x[1]]);
-  for(let [d,mo,y] of fechas){ if(mo>12&&d<=12)[d,mo]=[mo,d]; const dt=new Date(y,mo-1,d); if(dt.getMonth()===mo-1&&y>=2020&&dt<=hoy){ out.fecha=`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`; break; } }
-  const moneyRe=/(\d{1,3}(?:[.,]\d{3})*[.,]\d{2}|\d+[.,]\d{2})(?!\d)/g; const nums=l=>[...l.matchAll(moneyRe)].map(x=>parseMonto(x[1]));
-  let tot=0;
-  for(const l of lines){ if(/TOTAL|A PAGAR|IMPORTE/.test(l) && !/SUB ?TOTAL|DESCUENTO|SUBT/.test(l)){ const ns=nums(l); if(ns.length) tot=Math.max(tot,...ns); } }
-  if(!tot){ const i=lines.findIndex(l=>/TOTAL/.test(l)&&!/SUB/.test(l)); if(i>-1){ const ns=nums(lines[i+1]||''); if(ns.length) tot=ns[0]; } }
-  if(!tot){ const all=lines.filter(l=>!/RUC|AUTORIZ|CLAVE|TEL/.test(l)).flatMap(nums).filter(v=>v<50000); if(all.length) tot=Math.max(...all); }
+  const fechas=[]; for(const l of lines){ const pri=/FECHA|EMISI/.test(l)?0:1; for(const x of l.matchAll(/(\d{1,2})\s?[\/\-.]\s?(\d{1,2})\s?[\/\-.]\s?(20\d{2}|\d{2})(?!\d)/g)){ let y=+x[3]; if(y<100)y+=2000; fechas.push([pri,+x[1],+x[2],y]); } for(const x of l.matchAll(/(20\d{2})\s?[\/\-.]\s?(\d{1,2})\s?[\/\-.]\s?(\d{1,2})(?!\d)/g)) fechas.push([pri,+x[3],+x[2],+x[1]]); }
+  fechas.sort((a,b)=>a[0]-b[0]);
+  for(let [,d,mo,y] of fechas){ if(mo>12&&d<=12)[d,mo]=[mo,d]; const dt=new Date(y,mo-1,d); if(dt.getMonth()===mo-1&&y>=2020&&dt<=hoy){ out.fecha=fechaISO(y,mo,d); break; } }
+  if(!out.fecha && deClave && deClave.fecha) out.fecha=deClave.fecha;
+  // hora
+  const horaDe=l=>{ const x=l.match(/(?<![\d.,])([01]?\d|2[0-3])\s?[:h]\s?([0-5]\d)(?::[0-5]\d)?\s*(A\.?\s?M\.?|P\.?\s?M\.?)?(?![\d.,])/); if(!x) return ''; let hh=+x[1]; const ap=(x[3]||'').replace(/[.\s]/g,''); if(ap==='PM'&&hh<12) hh+=12; if(ap==='AM'&&hh===12) hh=0; return String(hh).padStart(2,'0')+':'+x[2]; };
+  for(const l of lines) if(/HORA|FECHA|EMISI/.test(l)){ const hh=horaDe(l); if(hh){ out.hora=hh; break; } }
+  if(!out.hora) for(const l of lines){ if(/TEL|CEL|RUC|AUTORIZ|CLAVE/.test(l)) continue; const hh=horaDe(l); if(hh){ out.hora=hh; break; } }
+  // valor total a pagar
+  const moneyRe=/(\d{1,3}(?:[.,]\d{3})*[.,]\d{2}|\d+[.,]\d{2})(?!\d)/g; const nums=l=>[...l.replace(/\d+\s?%/g,' ').matchAll(moneyRe)].map(x=>parseMonto(x[1]));
+  const NO_TOT=/SUB ?-?TOTAL|SUBT|DESCUENTO|DSCTO|SIN IMPUESTO|TOTAL IVA|IVA|ICE|PROPINA|RECIBIDO|CAMBIO|VUELTO|EFECTIVO|ITEMS|ART[IÍ]CULOS|CANT|AHORR|BASE|TARIFA|DEVOLUC/;
+  const pris=[[/VALOR TOTAL|TOTAL A PAGAR|IMPORTE TOTAL|TOTAL GENERAL|TOTAL FACTURA|TOTAL US|TOTAL \$|NETO A PAGAR|TOTAL NETO/,0],[/^TOTAL\b|\bTOTAL\s*:?\s*\$?\s*\d|\bTOTAL$/,1],[/A PAGAR|TOTAL/,2]];
+  let cand=[]; lines.forEach((l,i)=>{ for(const [re,pr] of pris){ if(!re.test(l)) continue; if(NO_TOT.test(l.replace(re,''))&&pr>0) break; if(/SUB ?-?TOTAL|SUBT/.test(l)) break; let ns=nums(l); if(!ns.length) ns=nums(lines[i+1]||''); if(ns.length) cand.push([pr,i,ns[ns.length-1]]); break; } });
+  // comprobar con subtotal + IVA cuando se pueda
+  let sub=0,iva=0; for(const l of lines){ const ns=nums(l); if(!ns.length) continue; if(/SUB ?-?TOTAL|SUBT/.test(l)&&!/DESC|0%|CERO/.test(l)) sub+=ns[ns.length-1]; else if(/\bIVA\b/.test(l)&&!/SUB|BASE|0%/.test(l)) iva=Math.max(iva,ns[ns.length-1]); }
+  let tot=0; if(cand.length){ cand.sort((a,b)=>a[0]-b[0]||b[1]-a[1]); const meta=sub?r2(sub+iva):0; const ok=meta&&cand.find(c=>Math.abs(c[2]-meta)<.02); tot=ok?ok[2]:cand[0][2]; }
+  if(!tot&&sub) tot=r2(sub+iva);
+  if(!tot){ const all=lines.filter(l=>!/RUC|AUTORIZ|CLAVE|TEL|CEL|RECIBIDO|CAMBIO|EFECTIVO/.test(l)).flatMap(nums).filter(v=>v<50000); if(all.length) tot=Math.max(...all); }
   if(tot) out.valor=tot;
-  const stop=/RUC|R\.U\.C|FACTURA|DIREC|DIR[.:]|TELF|TEL[EÉ]F|AUTORIZ|FECHA|CLAVE|AMBIENTE|EMISI|OBLIGAD|CONTRIBUYENTE|MATRIZ|SUCURSAL|N[°º]|CLIENTE|EMAIL|CORREO|WWW|HTTP|RIMPE|REGIMEN|AGENTE|NOTA DE VENTA/;
-  for(const l of lines.slice(0,8)){ const letters=(l.match(/[A-ZÁÉÍÓÚÑ]/g)||[]).length; if(l.length>=5 && letters/l.length>.6 && !stop.test(l)){ out.beneficiario=l.replace(/[^A-ZÁÉÍÓÚÑ0-9 .&\-]/g,'').replace(/\s+/g,' ').trim(); break; } }
-  for(const l of lines){ const x=l.match(/(?:DIRECCI[OÓ]N|DIR\.)\s*(?:MATRIZ|SUCURSAL|ESTABLECIMIENTO)?\s*:?\s*(.{3,})/); if(x){ out.lugar=x[1].replace(/[^A-ZÁÉÍÓÚÑ0-9 .,#\-]/g,'').replace(/\s+/g,' ').trim().slice(0,40); break; } }
+  // emisor: dueño o empresa (razón social), si no el local
+  const enc=[]; for(const l of lines.slice(0,10)){ if(/CLIENTE|COMPRADOR|SE[ÑN]OR(ES)?:|DESCRIPCI|CANT/.test(l)) break; const lab=l.match(/(?:RAZ[OÓ]N SOCIAL|PROPIETARI[OA]|CONTRIBUYENTE)\s*:?\s*(.{4,})/); if(lab){ enc.unshift({t:limpiaTxt(lab[1]),tipo:'razon'}); continue; }
+    const letters=(l.match(/[A-ZÁÉÍÓÚÑ]/g)||[]).length; if(l.length>=5 && letters/l.length>.6 && !STOP_ENC.test(l)) enc.push({t:limpiaTxt(l),tipo:TIENDA_RE.test(l)?'local':EMPRESA_RE.test(l)?'empresa':l.split(' ').length>=2&&l.split(' ').length<=5?'persona':'local'}); }
+  const razon=enc.find(e=>e.tipo==='razon')||enc.find(e=>e.tipo==='persona'||e.tipo==='empresa'), local=enc.find(e=>e.tipo==='local');
+  out.beneficiario=(razon||local||{}).t||'S/N'; if(local) out._local=local.t;
+  // lugar: sucursal, establecimiento, "ubicados en" o dirección
+  const lugRe=[/(?:DIR(?:ECCI[OÓ]N)?\.?\s*(?:DE(?:L)?\s*)?(?:SUCURSAL|ESTABLECIMIENTO|LOCAL))\s*:?\s*(.{3,})/,/SUCURSAL\s*:?\s*(.{3,})/,/UBICAD[OA]S?\s*(?:EN)?\s*:?\s*(.{3,})/,/(?:DIRECCI[OÓ]N|DIR\.)\s*(?:MATRIZ)?\s*:?\s*(.{3,})/];
+  let lugar=''; const hasta=lines.findIndex(l=>/CLIENTE|COMPRADOR|SE[ÑN]OR(ES)?:/.test(l)); const zona=hasta>0?lines.slice(0,hasta):lines.slice(0,14);
+  for(const re of lugRe){ for(const l of zona){ const x=l.match(re); if(x){ lugar=limpiaTxt(x[1]); break; } } if(lugar) break; }
+  out.lugar=lugar||'S/N';
   if(/TRANSFER/.test(T)) out.pago='TRANSFERENCIA'; else if(/CHEQUE/.test(T)) out.pago='CHEQUE'; else if(/EFECTIVO|SIN UTILIZACI/.test(T)) out.pago='EFECTIVO';
-  const i=lines.findIndex(l=>/DESCRIPCI|DETALLE|CONCEPTO|PRODUCTO/.test(l));
-  if(i>-1){ for(const l of lines.slice(i+1,i+4)){ const t=l.replace(moneyRe,' ').replace(/^\s*\d+([.,]\d+)?\s+/,'').replace(/[^A-ZÁÉÍÓÚÑ0-9 #\/.\-]/g,' ').replace(/\s+/g,' ').trim(); if(t.length>=3 && /[A-ZÁÉÍÓÚÑ]{3}/.test(t) && !/TOTAL|IVA|SUBTOTAL/.test(t)){ out.detalle=t.slice(0,40); break; } } }
+  // productos, uno por línea
+  const i0=lines.findIndex(l=>/DESCRIPCI|DETALLE|CONCEPTO|PRODUCTO|ART[IÍ]CULO/.test(l)); const items=[];
+  if(i0>-1){ for(const l of lines.slice(i0+1,i0+25)){ if(/SUB ?-?TOTAL|SUBT|^TOTAL|VALOR TOTAL|\bIVA\b|FORMA DE PAGO|INFORMACI|DESCUENTO|^-{4,}$|^={4,}$/.test(l)) { if(items.length) break; else continue; }
+      let t=l.replace(/^\s*(\d+([.,]\d+)?\s+){1,2}/,'').replace(/\s\d+\s?[.,]\s?\d.*$/,'').replace(moneyRe,' ').replace(/\s+\d+([.,]\d+)?(\s+\d+([.,]\d+)?)*\s*$/,'').replace(/^\s*(\d+([.,]\d+)?\s+){1,2}/,'').replace(/^[A-Z]{0,3}\d{4,}\s+/,'');
+      t=limpiaTxt(t,60); if(t.length>=3 && /[A-ZÁÉÍÓÚÑ]{3}/.test(t)) items.push(t); if(items.length>=15) break; } }
+  if(items.length) out.detalle=items.join('\n');
   return out;
 }
 function adivinarCat(T){
@@ -817,18 +851,12 @@ function ordenarEsquinas(q){ const s=q.map(p=>p[0]+p[1]), d=q.map(p=>p[0]-p[1]);
   const set=new Set([tl,tr,br,bl]); if(set.size===4) return [tl,tr,br,bl];
   const cx=q.reduce((a,p)=>a+p[0],0)/4, cy=q.reduce((a,p)=>a+p[1],0)/4; const o=q.slice().sort((a,b)=>Math.atan2(a[1]-cy,a[0]-cx)-Math.atan2(b[1]-cy,b[0]-cx)); // desde arriba-izq en sentido horario
   let k=0,mn=1e9; o.forEach((p,i)=>{ if(p[0]+p[1]<mn){mn=p[0]+p[1];k=i;} }); return [0,1,2,3].map(i=>o[(k+i)%4]); }
-/* devuelve las 4 esquinas normalizadas (0..1) de la hoja, o null si no la encuentra */
-function detectarHoja(src){
-  const k=Math.min(1,320/Math.max(src.width,src.height)), w=Math.max(8,Math.round(src.width*k)), h=Math.max(8,Math.round(src.height*k));
-  const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(src,0,0,w,h);
-  const p=x.getImageData(0,0,w,h).data, N=w*h, sc=new Uint8Array(N), hist=new Uint32Array(256);
-  for(let i=0,j=0;j<N;i+=4,j++){ const r=p[i],g=p[i+1],b=p[i+2], mx=Math.max(r,g,b), mn=Math.min(r,g,b); let v=.299*r+.587*g+.114*b-(mx-mn)*.9; v=v<0?0:v>255?255:v|0; sc[j]=v; hist[v]++; }
-  const th=otsu(hist,N); let m=new Uint8Array(N); for(let j=0;j<N;j++) m[j]=sc[j]>th?1:0;
-  // cerrar huecos que deja el texto: dilatar y luego erosionar (radio 2)
+/* convierte una máscara (1 = hoja) en las 4 esquinas normalizadas, o null */
+function quadDeMascara(m,w,h,cerrar=true){ const N=w*h;
   const morf=(a,dil)=>{ const o=new Uint8Array(N); for(let y=0;y<h;y++) for(let X=0;X<w;X++){ let hit=false;
       for(let dy=-2;dy<=2&&!hit;dy++){ const yy=y+dy; if(yy<0||yy>=h) continue; for(let dx=-2;dx<=2;dx++){ const xx=X+dx; if(xx<0||xx>=w) continue; if(a[yy*w+xx]===(dil?1:0)){ hit=true; break; } } }
       o[y*w+X]= dil? (hit?1:0) : (hit?0:1); } return o; };
-  m=morf(morf(m,true),false);
+  if(cerrar) m=morf(morf(m,true),false);
   const lab=new Int32Array(N), st=new Int32Array(N); let id=0,bestId=0,bestScore=0,bestN=0;
   for(let s=0;s<N;s++){ if(!m[s]||lab[s]) continue; id++; let sp=0; st[sp++]=s; lab[s]=id; let n=0,cx=0,cy=0;
     while(sp){ const q=st[--sp]; n++; const qx=q%w, qy=(q/w)|0; cx+=qx; cy+=qy;
@@ -838,10 +866,38 @@ function detectarHoja(src){
   if(!bestId || bestN<N*.06) return null;
   const pts=[]; for(let y=0;y<h;y++){ let a=-1,b=-1; for(let X=0;X<w;X++) if(lab[y*w+X]===bestId){ if(a<0)a=X; b=X; } if(a>=0){ pts.push([a,y]); if(b!==a) pts.push([b,y]); } }
   const hl=hull(pts); const q=quadDeHull(hl); if(!q) return null;
-  const qa=polyArea(q), ha=polyArea(hl); if(qa<ha*.85 || qa<N*.06) return null; // no parece una hoja de 4 lados
-  if(qa>N*.94) return null; // la hoja ya llena la foto
-  return ordenarEsquinas(q).map(([X,Y])=>[Math.min(1,Math.max(0,(X+.5)/w)),Math.min(1,Math.max(0,(Y+.5)/h))]);
-}
+  const qa=polyArea(q), ha=polyArea(hl); if(qa<ha*.8 || qa<N*.06 || qa>N*.94) return null;
+  if(q.filter(([X,Y])=>(X<=1||X>=w-2)&&(Y<=1||Y>=h-2)).length>=1 && q.filter(([X,Y])=>X<=1||X>=w-2||Y<=1||Y>=h-2).length>=2) return null; // se pegó a las esquinas de la foto: no es la hoja
+  return ordenarEsquinas(q).map(([X,Y])=>[Math.min(1,Math.max(0,(X+.5)/w)),Math.min(1,Math.max(0,(Y+.5)/h))]); }
+/* busca la hoja de 3 formas: por brillo del papel, por sus bordes y, si nada sirve, recorta alrededor del texto */
+function detectarHoja(src,conTexto=false){
+  const k=Math.min(1,320/Math.max(src.width,src.height)), w=Math.max(8,Math.round(src.width*k)), h=Math.max(8,Math.round(src.height*k)), N=w*h;
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(src,0,0,w,h);
+  const p=x.getImageData(0,0,w,h).data, sc=new Uint8Array(N), g=new Float32Array(N), hist=new Uint32Array(256);
+  for(let i=0,j=0;j<N;i+=4,j++){ const r=p[i],gg=p[i+1],b=p[i+2], mx=Math.max(r,gg,b), mn=Math.min(r,gg,b), L=.299*r+.587*gg+.114*b; g[j]=L; let v=L-(mx-mn)*.9; v=v<0?0:v>255?255:v|0; sc[j]=v; hist[v]++; }
+  // 1) papel claro sobre fondo más oscuro o de color
+  const th=otsu(hist,N); let m=new Uint8Array(N); for(let j=0;j<N;j++) m[j]=sc[j]>th?1:0;
+  let q=quadDeMascara(m,w,h); if(q) return conTexto?{q,modo:'ok'}:q;
+  // 2) por los bordes: lo que queda encerrado por una línea fuerte
+  const bl=new Float32Array(N); for(let y=1;y<h-1;y++) for(let X=1;X<w-1;X++){ let s=0; for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) s+=g[(y+dy)*w+X+dx]; bl[y*w+X]=s/9; }
+  const mag=new Uint8Array(N), hm=new Uint32Array(256); for(let y=1;y<h-1;y++) for(let X=1;X<w-1;X++){ const i=y*w+X; const gx=bl[i+1-w]+2*bl[i+1]+bl[i+1+w]-bl[i-1-w]-2*bl[i-1]-bl[i-1+w], gy=bl[i-1+w]+2*bl[i+w]+bl[i+1+w]-bl[i-1-w]-2*bl[i-w]-bl[i+1-w]; let v=Math.hypot(gx,gy)/4; v=v>255?255:v|0; mag[i]=v; hm[v]++; }
+  const te=Math.max(12,otsu(hm,N)); const E=new Uint8Array(N); for(let i=0;i<N;i++) E[i]=mag[i]>te?1:0;
+  const Ed=new Uint8Array(N); for(let y=0;y<h;y++) for(let X=0;X<w;X++){ let v=0; for(let dy=-1;dy<=1&&!v;dy++) for(let dx=-1;dx<=1;dx++){ const yy=y+dy,xx=X+dx; if(yy>=0&&yy<h&&xx>=0&&xx<w&&E[yy*w+xx]){v=1;break;} } Ed[y*w+X]=v; }
+  const fuera=new Uint8Array(N), st=new Int32Array(N); let sp=0; const push=i=>{ if(!fuera[i]&&!Ed[i]){ fuera[i]=1; st[sp++]=i; } };
+  for(let X=0;X<w;X++){ push(X); push((h-1)*w+X); } for(let y=0;y<h;y++){ push(y*w); push(y*w+w-1); }
+  while(sp){ const i=st[--sp], X=i%w, y=(i/w)|0; if(X>0) push(i-1); if(X<w-1) push(i+1); if(y>0) push(i-w); if(y<h-1) push(i+w); }
+  m=new Uint8Array(N); for(let i=0;i<N;i++) m[i]=fuera[i]?0:1;
+  q=quadDeMascara(m,w,h,false); if(q) return conTexto?{q,modo:'ok'}:q;
+  if(!conTexto) return null;
+  // 3) recortar alrededor de donde hay letras (tinta oscura sobre fondo claro)
+  const k2=7, ink=new Uint8Array(N); let tot=0; for(let y=k2;y<h-k2;y++) for(let X=k2;X<w-k2;X++){ let s=0,n=0; for(let dy=-k2;dy<=k2;dy+=2) for(let dx=-k2;dx<=k2;dx+=2){ s+=g[(y+dy)*w+X+dx]; n++; } const mu=s/n; if(mu>110 && g[y*w+X]<mu-28){ ink[y*w+X]=1; tot++; } }
+  if(tot<N*.004) return null;
+  const rows=new Uint32Array(h), cols=new Uint32Array(w); for(let y=0;y<h;y++) for(let X=0;X<w;X++) if(ink[y*w+X]){ rows[y]++; cols[X]++; }
+  const corte=(a,frac)=>{ let acc=0,lo=0,hi=a.length-1; const t=tot*frac; for(let i=0;i<a.length;i++){ acc+=a[i]; if(acc>=t){lo=i;break;} } acc=0; for(let i=a.length-1;i>=0;i--){ acc+=a[i]; if(acc>=t){hi=i;break;} } return [lo,hi]; };
+  const [y1,y2]=corte(rows,.003), [x1,x2]=corte(cols,.003), mx=w*.06, my=h*.04;
+  const L=Math.max(0,x1-mx)/w, R=Math.min(w,x2+mx)/w, T=Math.max(0,y1-my)/h, B=Math.min(h,y2+my)/h;
+  if((R-L)*(B-T)>.88 || (R-L)<.2 || (B-T)<.2) return null;
+  return {q:[[L,T],[R,T],[R,B],[L,B]],modo:'aprox'}; }
 function homografia(dst,src){ // H tal que src ~ H*dst  (8 incógnitas)
   const A=[],B=[]; for(let i=0;i<4;i++){ const [x,y]=dst[i],[u,v]=src[i]; A.push([x,y,1,0,0,0,-u*x,-u*y]); B.push(u); A.push([0,0,0,x,y,1,-v*x,-v*y]); B.push(v); }
   for(let i=0;i<8;i++){ let p=i; for(let r=i+1;r<8;r++) if(Math.abs(A[r][i])>Math.abs(A[p][i])) p=r; [A[i],A[p]]=[A[p],A[i]]; [B[i],B[p]]=[B[p],B[i]];
@@ -893,7 +949,7 @@ function abrirBordes(){ if(!W||!W.origC) return; W.qEdit=(W.quad||QUAD_TODO).map
   box.addEventListener('pointermove',e=>{ if(drag<0) return; const r=box.getBoundingClientRect(); W.qEdit[drag]=[Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))]; dibujarBordes(); });
   const fin=()=>{drag=-1;}; box.addEventListener('pointerup',fin); box.addEventListener('pointercancel',fin); }
 function dibujarBordes(){ const q=W&&W.qEdit; if(!q) return; $('#crop-poly')?.setAttribute('points',q.map(p=>p.join(',')).join(' ')); document.querySelectorAll('.crop-h').forEach((h,i)=>{ h.style.left=(q[i][0]*100)+'%'; h.style.top=(q[i][1]*100)+'%'; }); }
-async function cerrarBordes(ok){ const el=$('#crop'); if(ok){ W.quad=W.qEdit; W.scanModo='mejorada'; toast('Enderezando…'); await aplicarScan(); $('.toast').hidden=true; } el&&el.remove(); W.qEdit=null; renderWz(); if(ok) autoLeer(true); }
+async function cerrarBordes(ok){ const el=$('#crop'); if(ok){ W.quad=W.qEdit; W.bordes='ok'; W.scanModo='mejorada'; toast('Enderezando…'); await aplicarScan(); $('.toast').hidden=true; } el&&el.remove(); W.qEdit=null; renderWz(); if(ok) autoLeer(true); }
 
 /* ---------- lectura de la factura: Claude (con internet) o Tesseract (sin internet) ---------- */
 function conocidos(){ const by={}; for(const m of S.movs){ if(!m.beneficiario||m.persona||m.tipo!=='gasto') continue; const k=m.beneficiario; (by[k]=by[k]||[]).push(m); } return by; }
@@ -904,36 +960,39 @@ function parecido(a,b){ const A=bigramas(a),B=bigramas(b); let na=0,nb=0,inter=0
 function completarConHistorial(out,texto){
   const by=conocidos(); let hist=null;
   if(out.ruc){ const m=S.movs.filter(x=>x.ruc===out.ruc&&x.beneficiario); if(m.length) hist=m; }
-  if(!hist){ const cands=[out.beneficiario||'',...String(texto||'').toUpperCase().split('\n').slice(0,12)].map(s=>s.trim()).filter(s=>s.length>=4);
+  if(!hist){ const cands=[out.beneficiario||'',out._local||'',...String(texto||'').toUpperCase().split('\n').slice(0,12)].map(s=>s.trim()).filter(s=>s.length>=4);
     let best=0,bk=null; for(const k of Object.keys(by)) for(const c of cands){ const p=parecido(k,c); if(p>best){best=p;bk=k;} }
     if(bk && best>=.72) hist=by[bk]; }
-  if(hist){ const ult=hist.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))[0];
-    out.beneficiario=ult.beneficiario; if(!out.lugar) out.lugar=masComun(hist,'lugar');
-    const hc=masComun(hist,'categoria'), kw=out.detalle?adivinarCat(out.detalle.toUpperCase()):''; if(hc && CAT[hc] && !CAT[hc].oculta && (hist.filter(m=>m.categoria===hc).length>=2 || (!out.categoria && !kw))) out.categoria=hc;
-    if(!out.detalle){ const hd=masComun(hist,'detalle'); if(hd) out.detalle=hd; } out._hist=true; }
+  if(hist){ const hc=masComun(hist,'categoria'), kw=out.detalle?adivinarCat(out.detalle.toUpperCase()):''; if(hc && CAT[hc] && !CAT[hc].oculta && (hist.filter(m=>m.categoria===hc).length>=2 || (!out.categoria && !kw))) out.categoria=hc; out._hist=true; }
   if(!out.categoria) out.categoria=adivinarCat(((out.detalle||'')+' '+(out.beneficiario||'')+' '+(texto||'')).toUpperCase());
   return out; }
 const LEER_SYS=`Lees fotos de facturas, notas de venta y tickets de compra de Ecuador para la caja chica de una obra de construcción. Devuelve los datos con la herramienta registrar_factura.
 Reglas:
-- beneficiario es quien VENDE (el emisor de la factura, razón social o nombre comercial), nunca el cliente ni el consorcio que compra.
+- Todo lo que pides es del EMISOR (quien vende), nunca del cliente ni del consorcio que compra.
+- razon_social: nombre de la persona dueña o de la empresa que emite (razón social). nombre_comercial: nombre del local o tienda.
 - factura con el formato 001-001-000000123 (establecimiento-punto-secuencial de 9 dígitos).
 - valor es el TOTAL a pagar (con IVA), en dólares.
-- detalle: qué se compró, corto, en mayúsculas, como se anota en una hoja de caja chica (ej.: DIESEL, GASOLINA, ALAMBRE #18, CEMENTO, ALMUERZOS, AGUA). Si hay muchos productos, el principal o un resumen de máximo 40 caracteres.
-- lugar: ciudad, parroquia o sector corto donde está el local, en mayúsculas.
+- valor: el TOTAL A PAGAR / VALOR TOTAL / IMPORTE TOTAL (con IVA). Nunca el subtotal, el IVA, el descuento, el efectivo recibido ni el cambio.
+- productos: la descripción de cada producto tal como aparece en la factura, uno por elemento, en mayúsculas, sin cantidades ni precios.
+- direccion: la dirección de la sucursal o del establecimiento (o donde diga "ubicados en"); si no hay, la dirección matriz. Vacío si no hay ninguna.
+- factura: el número de factura o de comprobante electrónico (001-001-000000123). Si solo se ve la clave de acceso de 49 dígitos, el número son los dígitos 25 a 39 (serie de 6 + secuencial de 9).
+- hora: hora de emisión en formato 24 h HH:MM si aparece; vacío si no.
 - Deja vacío lo que no se lea con seguridad. No inventes.`;
 async function leerConClaude(blob){
   const sm=await compress(blob,1600,.85), b64=(await blobToDataURL(sm.blob)).split(',')[1];
   const by=conocidos(), conoc=Object.entries(by).sort((a,b)=>b[1].length-a[1].length).slice(0,40).map(([k,l])=>`- ${k} | lugar: ${masComun(l,'lugar')||'—'} | categoría: ${masComun(l,'categoria')||'—'} | detalle usual: ${masComun(l,'detalle')||'—'}`).join('\n');
   const cats=visibleCats();
   const tool={name:'registrar_factura',description:'Registra los datos leídos de la foto.',strict:true,input_schema:{type:'object',additionalProperties:false,
-    required:['es_factura','factura','fecha','ruc','beneficiario','lugar','detalle','valor','pago','categoria'],properties:{
+    required:['es_factura','factura','fecha','hora','ruc','razon_social','nombre_comercial','direccion','productos','valor','pago','categoria'],properties:{
     es_factura:{type:'boolean',description:'true si la foto es una factura, nota de venta o ticket de compra'},
     factura:{type:'string',description:'Número de factura 001-001-000000123, o vacío'},
     fecha:{type:'string',description:'Fecha de emisión en formato AAAA-MM-DD, o vacío'},
     ruc:{type:'string',description:'RUC del emisor (13 dígitos), o vacío'},
-    beneficiario:{type:'string',description:'Emisor (quien vende) en mayúsculas'},
-    lugar:{type:'string',description:'Ciudad o sector en mayúsculas, o vacío'},
-    detalle:{type:'string',description:'Qué se compró, corto y en mayúsculas'},
+    hora:{type:'string',description:'Hora de emisión HH:MM (24 h), o vacío'},
+    razon_social:{type:'string',description:'Persona dueña o empresa que emite, en mayúsculas, o vacío'},
+    nombre_comercial:{type:'string',description:'Nombre del local o tienda, en mayúsculas, o vacío'},
+    direccion:{type:'string',description:'Dirección de la sucursal/establecimiento (o matriz), en mayúsculas, o vacío'},
+    productos:{type:'array',items:{type:'string'},description:'Descripción de cada producto, uno por elemento'},
     valor:{type:'number',description:'Total a pagar en USD, 0 si no se ve'},
     pago:{type:'string',enum:['EFECTIVO','TRANSFERENCIA','CHEQUE',''],description:'Forma de pago si aparece en la factura'},
     categoria:{type:'string',enum:cats.map(c=>c.id).concat(['']),description:'Categoría de gasto: '+cats.map(c=>c.id+' = '+c.n).join('; ')}}}};
@@ -941,14 +1000,17 @@ async function leerConClaude(blob){
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctl.signal,headers:{'content-type':'application/json','x-api-key':getKey(),'anthropic-version':'2026-10-21','anthropic-beta':'server-side-fallback-2026-07-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-opus-5-5',max_tokens:2000,fallbacks:'default',system:LEER_SYS,tools:[tool],tool_choice:{type:'tool',name:'registrar_factura'},
-        messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},{type:'text',text:`Hoy es ${todayISO()}.${conoc?`\nLocales donde ya compró antes (si el emisor es uno de estos, escribe el beneficiario exactamente igual y usa su lugar y categoría si encajan):\n${conoc}`:''}\nLee esta foto.`}]}]})});
+        messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},{type:'text',text:`Hoy es ${todayISO()}.${conoc?`\nLocales donde ya compró antes (úsalos solo como pista para la categoría):\n${conoc}`:''}\nLee esta foto.`}]}]})});
     if(!res.ok){ const e=new Error('HTTP '+res.status); e.status=res.status; throw e; }
     const j=await res.json(); const tu=(j.content||[]).find(b=>b.type==='tool_use'); if(!tu) throw new Error('sin datos');
     const r=tu.input||{}; const out={};
-    if(r.factura){ const f=String(r.factura).match(/(\d{3})\D*(\d{3})\D*(\d{1,9})/); out.factura=f?`${f[1]}-${f[2]}-${f[3].padStart(9,'0')}`:fmtFactura(r.factura); } if(/^\d{4}-\d{2}-\d{2}$/.test(r.fecha||'') && r.fecha<=todayISO()) out.fecha=r.fecha;
-    if(/^\d{10,13}$/.test(r.ruc||'')) out.ruc=r.ruc; for(const k of ['beneficiario','lugar','detalle']) if(r[k]) out[k]=String(r[k]).toUpperCase().trim().slice(0,60);
+    if(r.factura){ const f=String(r.factura).match(/(\d{1,3})\D+(\d{1,3})\D+(\d{1,9})/); out.factura=f?`${f[1].padStart(3,'0')}-${f[2].padStart(3,'0')}-${f[3].padStart(9,'0')}`:fmtFactura(r.factura); } if(/^\d{4}-\d{2}-\d{2}$/.test(r.fecha||'') && r.fecha<=todayISO()) out.fecha=r.fecha;
+    if(/^\d{10,13}$/.test(r.ruc||'')) out.ruc=r.ruc; const U=v=>String(v||'').toUpperCase().replace(/\s+/g,' ').trim();
+    out.beneficiario=(U(r.razon_social)||U(r.nombre_comercial)||'S/N').slice(0,60); if(r.nombre_comercial) out._local=U(r.nombre_comercial); out.lugar=(U(r.direccion)||'S/N').slice(0,70);
+    const it=(r.productos||[]).map(U).filter(Boolean).slice(0,15).map(x=>x.slice(0,60)); if(it.length) out.detalle=it.join('\n');
+    const hm=String(r.hora||'').match(/^(\d{1,2}):(\d{2})/); if(hm && +hm[1]<24) out.hora=hm[1].padStart(2,'0')+':'+hm[2];
     if(r.valor>0) out.valor=r2(r.valor); if(r.pago) out.pago=r.pago; if(r.categoria && CAT[r.categoria]) out.categoria=r.categoria;
-    out._texto=[r.beneficiario,r.ruc&&'RUC '+r.ruc,r.factura&&'FACTURA '+r.factura,r.fecha,r.detalle,r.lugar,r.valor&&'TOTAL '+r.valor].filter(Boolean).join('\n');
+    out._texto=[r.razon_social,r.nombre_comercial,r.ruc&&'RUC '+r.ruc,r.factura&&'FACTURA '+r.factura,r.fecha,r.hora,(r.productos||[]).join('\n'),r.direccion,r.valor&&'TOTAL '+r.valor].filter(Boolean).join('\n');
     out._noFactura=r.es_factura===false; return out;
   } finally{ clearTimeout(to); } }
 /* después de leer: saltar al paso de revisar, o al primero que falte */
@@ -1221,7 +1283,7 @@ function datosObra(nombre){
   return JSON.stringify({hoy:todayISO(),obra_consultada:o.nombre,
     obras:S.obras.map(x=>({nombre:x.nombre,...totales(movsObra(x.id))})),
     categorias:visibleCats().map(c=>({codigo:c.id,nombre:c.n})),
-    movimientos:ms.map(m=>({id:m.id,fecha:m.fecha,tipo:m.tipo,detalle:m.detalle,beneficiario:m.beneficiario||'',lugar:m.lugar||'',factura:m.factura||'',pago:m.pago,numero:m.numero||'',valor:m.valor,categoria:CAT[m.categoria]?.n||m.categoria||'',pago_a_persona:!!m.persona,foto_factura:!!m.fotoId,foto_comprobante:!!m.compId,
+    movimientos:ms.map(m=>({id:m.id,fecha:m.fecha,hora:m.hora||'',tipo:m.tipo,detalle:m.detalle,beneficiario:m.beneficiario||'',lugar:m.lugar||'',factura:m.factura||'',pago:m.pago,numero:m.numero||'',valor:m.valor,categoria:CAT[m.categoria]?.n||m.categoria||'',pago_a_persona:!!m.persona,foto_factura:!!m.fotoId,foto_comprobante:!!m.compId,
       texto_foto:(m.ocrTexto||'').slice(0,600),texto_comprobante:(m.ocrComp||'').slice(0,300)}))});
 }
 async function fotosPara(ids){
@@ -1297,7 +1359,7 @@ async function compress(blob,max=1600,q=.78){
 async function onFoto(file){ if(!file||!W) return; if(W.photoT==='comp') return onComp(file);
   if(W.mode!=='factura'){ toast('Procesando foto…'); try{ const r=await compress(file); if(W.fotoUrl) URL.revokeObjectURL(W.fotoUrl); W.foto=r.blob; W.fotoUrl=URL.createObjectURL(r.blob); W.fotoChanged=true; renderWz(); $('.toast').hidden=true; }catch(e){ toast('No se pudo leer esa imagen. Prueba con otra.'); } return; }
   toast('Buscando la hoja…'); const yo=W;
-  try{ const c=await bitmapDe(file,2400); if(W!==yo) return; W.origC=c; await new Promise(r=>setTimeout(r,20)); const q=detectarHoja(c); W.quad=q; W.bordes=q?'ok':'no'; W.scanModo='mejorada'; W.aviso=null;
+  try{ const c=await bitmapDe(file,2400); if(W!==yo) return; W.origC=c; await new Promise(r=>setTimeout(r,20)); const r=detectarHoja(c,true); W.quad=r&&r.q; W.bordes=r?r.modo:'no'; W.scanModo='mejorada'; W.aviso=null;
     await aplicarScan(); renderWz(); $('.toast').hidden=true; autoLeer(); }catch(e){ console.warn(e); toast('No se pudo leer esa imagen. Prueba con otra.'); } }
 
 /* ---------- detalle ---------- */
@@ -1308,7 +1370,7 @@ async function verMov(id){
   let aurl=null; if(m.audioId){ const f=await DB.get('fotos',m.audioId); if(f) aurl=URL.createObjectURL(f.blob); }
   openLayer(`${sheetHead(ing?'Fondo recibido':'Gasto')}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">${ing?`<span class="ico" style="--c:var(--good)">${svg(IC.INGRESO)}</span>`:catIcon(m.categoria)}
-      <div style="min-width:0"><div style="font-family:var(--f-display);font-size:28px;font-weight:700" class="num">${ing?'+':'−'}${money(m.valor)}</div><div style="color:var(--muted)">${esc(m.detalle)}</div></div></div>
+      <div style="min-width:0"><div style="font-family:var(--f-display);font-size:28px;font-weight:700" class="num">${ing?'+':'−'}${money(m.valor)}</div><div style="color:var(--muted)">${esc(m.detalle).replace(/\n/g,'<br>')}</div></div></div>
     ${ing?'':(url?`<button style="padding:0;border:0;background:none;width:100%;margin-bottom:12px;border-radius:var(--r);overflow:hidden" data-act="zoom" data-src="${url}"><img class="thumb" src="${url}" alt="Factura"></button>`
       :`<button class="offline" style="width:100%;border-color:var(--warn);color:var(--warn);background:var(--warn-soft);cursor:pointer" data-act="editar" data-id="${m.id}" data-s="0">${svg(UI.nophoto).replace('<svg','<svg style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;flex:none"')}Sin foto de factura. Toca para agregarla.</button>`)}
     ${aurl?`<div class="card" style="margin-bottom:12px"><div class="note" style="margin:0 0 6px">Nota de voz${m.voz?`: <i>“${esc(m.voz)}”</i>`:''}</div><audio controls src="${aurl}"></audio></div>`:''}
@@ -1319,7 +1381,7 @@ async function verMov(id){
       <div class="rv"><span>Beneficiario</span><b>${esc(m.beneficiario||'—')}</b></div>
       <div class="rv"><span>Lugar</span><b>${esc(m.lugar||'—')}</b></div>
       <div class="rv"><span>Factura</span><b class="num">${esc(m.factura||'Sin factura')}</b></div>`}
-      <div class="rv"><span>Fecha</span><b>${fmtDate(m.fecha)}</b></div>
+      <div class="rv"><span>Fecha</span><b>${fmtDate(m.fecha)}${m.hora?' · '+esc(m.hora):''}</b></div>
       <div class="rv"><span>Pago</span><b>${cap(m.pago)}${m.numero?' · '+esc(m.numero):''}</b></div>
       <div class="rv"><span>Obra</span><b>${esc(S.obras.find(o=>o.id===m.obraId)?.nombre||'')}</b></div></div>
     <div class="two"><button class="btn btn-ghost" data-act="editar" data-id="${m.id}">Editar</button><button class="btn btn-danger" data-act="borrar" data-id="${m.id}">Eliminar</button></div>`);
@@ -1401,25 +1463,25 @@ async function exportar(scope){
   for(const o of obras){
     let nm=o.nombre.toUpperCase().replace(/[\[\]:*?\/\\]/g,'').slice(0,31)||'OBRA'; while(usados.has(nm)) nm=nm.slice(0,28)+'_'+usados.size; usados.add(nm);
     const ws=wb.addWorksheet(nm,{views:[{state:'frozen',ySplit:1}]});
-    ws.columns=[{header:'FECHA',width:12},{header:'DETALLE',width:30},{header:'BENEFICIARIO',width:34},{header:'LUGAR O LOGO',width:20},{header:'FACTURA',width:20},{header:'# CHEQ O TRASFE',width:17},{header:'NUMERO',width:14},{header:'CREDITO',width:12},{header:'DEBITO',width:12},{header:'CATEGORIA',width:15},{header:'FOTO FACTURA',width:20},{header:'FOTO COMPROBANTE',width:20}];
+    ws.columns=[{header:'FECHA',width:12},{header:'HORA',width:8},{header:'DETALLE',width:34},{header:'BENEFICIARIO',width:34},{header:'LUGAR O LOGO',width:20},{header:'FACTURA',width:20},{header:'# CHEQ O TRASFE',width:17},{header:'NUMERO',width:14},{header:'CREDITO',width:12},{header:'DEBITO',width:12},{header:'CATEGORIA',width:15},{header:'FOTO FACTURA',width:20},{header:'FOTO COMPROBANTE',width:20}];
     ws.getRow(1).height=30; ws.getRow(1).eachCell(c=>{Object.assign(c,{font:head.font,fill:head.fill,alignment:head.alignment,border});});
     const ms=movsObra(o.id).slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.creado||0)-(b.creado||0));
     let r=2;
     for(const m of ms){
       const ing=m.tipo==='ingreso';
-      const row=ws.getRow(r); row.values=[parseISO(m.fecha),m.detalle,m.beneficiario||'',m.lugar||'-',m.persona?'SIN FACTURA':(m.factura||(m.pendiente?'PENDIENTE':'-')),m.pago,m.numero||'-',ing?m.valor:null,ing?null:m.valor,ing?'':m.categoria,'',''];
-      row.getCell(1).numFmt='dd/mm/yyyy'; row.getCell(8).numFmt='#,##0.00'; row.getCell(9).numFmt='#,##0.00';
-      row.eachCell({includeEmpty:true},c=>{c.border=border;c.alignment={vertical:'middle',wrapText:c.col===2||c.col===3};});
-      for(const [fid,col] of [[m.fotoId,10],[m.compId,11]]){ if(!fid) continue; const f=await DB.get('fotos',fid); if(f){ const sm=await compress(f.blob,1000,.72); const b64=await blobToDataURL(sm.blob);
+      const row=ws.getRow(r); row.values=[parseISO(m.fecha),m.hora||'',m.detalle,m.beneficiario||'',m.lugar||'-',m.persona?'SIN FACTURA':(m.factura||(m.pendiente?'PENDIENTE':'-')),m.pago,m.numero||'-',ing?m.valor:null,ing?null:m.valor,ing?'':m.categoria,'',''];
+      row.getCell(1).numFmt='dd/mm/yyyy'; row.getCell(9).numFmt='#,##0.00'; row.getCell(10).numFmt='#,##0.00';
+      row.eachCell({includeEmpty:true},c=>{c.border=border;c.alignment={vertical:'middle',wrapText:c.col===3||c.col===4||c.col===5};}); { const nl=(m.detalle||'').split('\n').length; if(nl>2) row.height=Math.max(row.height||0,15*nl); }
+      for(const [fid,col] of [[m.fotoId,11],[m.compId,12]]){ if(!fid) continue; const f=await DB.get('fotos',fid); if(f){ const sm=await compress(f.blob,1000,.72); const b64=await blobToDataURL(sm.blob);
         const imgId=wb.addImage({base64:b64,extension:'jpeg'}); let h=90, w=Math.round(90*sm.w/sm.h); if(w>140){ w=140; h=Math.round(140*sm.h/sm.w); }
-        ws.addImage(imgId,{tl:{col:col+0.05,row:r-1+0.05},ext:{width:w,height:h},editAs:'oneCell'}); row.height=72; } }
+        ws.addImage(imgId,{tl:{col:col+0.05,row:r-1+0.05},ext:{width:w,height:h},editAs:'oneCell'}); row.height=Math.max(72,row.height||0); } }
       r++;
     }
     const last=r-1, t=totales(ms);
-    const tr=ws.getRow(r+1); tr.getCell(7).value='TOTAL'; tr.getCell(8).value={formula:`SUM(H2:H${Math.max(2,last)})`,result:t.ing}; tr.getCell(9).value={formula:`SUM(I2:I${Math.max(2,last)})`,result:t.gas};
-    const sr=ws.getRow(r+2); sr.getCell(7).value='SALDO'; sr.getCell(9).value={formula:`H${r+1}-I${r+1}`,result:t.saldo};
-    [tr,sr].forEach(x=>{x.font={bold:true};x.getCell(8).numFmt='#,##0.00';x.getCell(9).numFmt='#,##0.00';});
-    ws.autoFilter={from:'A1',to:`L${Math.max(1,last)}`};
+    const tr=ws.getRow(r+1); tr.getCell(8).value='TOTAL'; tr.getCell(9).value={formula:`SUM(I2:I${Math.max(2,last)})`,result:t.ing}; tr.getCell(10).value={formula:`SUM(J2:J${Math.max(2,last)})`,result:t.gas};
+    const sr=ws.getRow(r+2); sr.getCell(8).value='SALDO'; sr.getCell(10).value={formula:`I${r+1}-J${r+1}`,result:t.saldo};
+    [tr,sr].forEach(x=>{x.font={bold:true};x.getCell(9).numFmt='#,##0.00';x.getCell(10).numFmt='#,##0.00';});
+    ws.autoFilter={from:'A1',to:`M${Math.max(1,last)}`};
   }
   const wc=wb.addWorksheet('CATEGORIAS'); wc.columns=[{width:22},{width:16},{width:14},{width:10}];
   let r=1;
@@ -1483,7 +1545,7 @@ document.addEventListener('click',async e=>{
     case 'releer': W.aviso=null; autoLeer(true); break;
     case 'bordes': if(!W.origC && W.foto){ W.origC=await bitmapDe(W.foto,2400); W.quad=null; } abrirBordes(); break;
     case 'crop-todo': W.qEdit=QUAD_TODO.map(p=>p.slice()); dibujarBordes(); break;
-    case 'crop-auto': { const q=detectarHoja(W.origC); if(q){ W.qEdit=q; dibujarBordes(); } else toast('No encontré la hoja. Muévelos a mano.'); break; }
+    case 'crop-auto': { const r=detectarHoja(W.origC,true); const q=r&&r.q; if(q){ W.qEdit=q; dibujarBordes(); } else toast('No encontré la hoja. Muévelos a mano.'); break; }
     case 'crop-ok': await cerrarBordes(true); break;
     case 'crop-x': await cerrarBordes(false); break;
     case 'scan-modo': W.scanModo=W.scanModo==='original'?'mejorada':'original'; await aplicarScan(); renderWz(); break;
