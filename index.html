@@ -223,6 +223,7 @@ audio{width:100%;height:40px}
 .cat-opt{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;border-radius:14px;border:1px solid var(--line);background:var(--surface);font-size:12.5px;font-weight:600;text-align:center}
 .cat-opt.on{border-color:var(--c);box-shadow:0 0 0 1.5px var(--c) inset;background:color-mix(in srgb,var(--c) 8%,var(--surface))}
 .photo-box{border:2px dashed var(--line);border-radius:18px;background:var(--surface);min-height:220px;display:grid;place-items:center;overflow:hidden;position:relative}
+.vin{margin:0;padding-left:18px;text-align:left;display:inline-block}.vin li{margin:1px 0}
 .scanbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .scanbar .chip{padding:6px 12px;font-size:13px}
 .scanbar>.autolbl,.scanbar>.note{width:100%}
@@ -381,6 +382,9 @@ const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const fmtM = new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD',minimumFractionDigits:2});
 const money = v => fmtM.format(Math.round((v||0)*100)/100);
 const r2 = v => Math.round(v*100)/100;
+const sinVinetas=t=>String(t||'').split('\n').map(l=>l.replace(/^\s*[•\-*·]\s*/,'').trim()).filter(Boolean).join('\n');
+const conVinetas=t=>{ const ls=sinVinetas(t).split('\n').filter(Boolean); return ls.map(l=>'• '+l).join('\n'); };
+const listaDetalle=t=>{ const ls=sinVinetas(t).split('\n').filter(Boolean); if(!ls.length) return '—'; if(ls.length===1) return esc(ls[0]); return `<ul class="vin">${ls.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`; };
 function horaAhora(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 function todayISO(off=0){const d=new Date();d.setDate(d.getDate()+off);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 const parseISO = s => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
@@ -602,7 +606,7 @@ const STEPS_F=['foto','valor','detalle','factura','pago','revisar'], STEPS_P=['p
 const steps=()=> W&&W.mode==='persona'?STEPS_P:STEPS_F;
 const MOTIVOS=[['ADELANTO DE SUELDO','MOBRA'],['COMIDA','ALIMENTACION'],['PAGO DE JORNAL','MOBRA'],['MOVILIZACIÓN','ADM'],['OTRO','']];
 function elegirTipo(){ openLayer(`${sheetHead('¿Qué vas a registrar?')}<div class="pay-opts">
-  <button class="pay" data-act="nuevo-factura"><span class="ico" style="--c:var(--accent)">${svg(UI.scan)}</span><div><div>Compra con factura</div><small>Solo toma la foto: recorta la hoja y llena todo</small></div></button>
+  <button class="pay" data-act="nuevo-factura"><span class="ico" style="--c:var(--accent)">${svg(UI.scan)}</span><div><div>Compra con factura</div><small>Con foto la app recorta la hoja y llena todo</small></div></button>
   <button class="pay" data-act="voz"><span class="ico" style="--c:var(--bad)">${svg(UI.mic)}</span><div><div>Nota de voz</div><small>Dilo ahora y complétalo después con la foto</small></div></button>
   <button class="pay" data-act="nuevo-persona"><span class="ico" style="--c:var(--ink)">${svg(UI.person)}</span><div><div>Pago a una persona</div><small>Adelantos, comida, jornales. Sin factura.</small></div></button></div>`); }
 function nuevoGasto(mode='factura'){ W={mode,step:0,isNew:true,d:{tipo:'gasto',fecha:todayISO(),hora:horaAhora(),pago:'EFECTIVO',valor:'',categoria:'',detalle:'',lugar:'',beneficiario:'',factura:'',numero:''},foto:null,fotoUrl:null,fotoChanged:false,comp:null,compUrl:null,compChanged:false,auto:new Set(),ocr:null,ocrC:null}; renderWz(); }
@@ -617,7 +621,7 @@ const dl=(id,campo,p=false)=>`<datalist id="${id}">${sugerencias(campo,p).map(v=
 function renderWz(){
   const STEPS=steps(), st=STEPS[W.step], d=W.d; let body='';
   if(st==='foto') body=`<div class="q">Toma la foto de la factura</div><p class="hint">Pon la hoja sobre algo oscuro. La app la recorta, la mejora y llena los datos sola.</p>
-    <div class="photo-box">${W.fotoUrl?`<img src="${W.fotoUrl}" alt="Foto de la factura">`:`<div class="photo-ph">${svg(UI.cam)}<span>Aún no hay foto</span></div>`}</div>
+    <div class="photo-box">${W.fotoUrl?`<img src="${W.fotoUrl}" alt="Foto de la factura">`:`<button class="photo-ph" data-act="cam" style="border:0;background:none;width:100%;min-height:220px;cursor:pointer">${svg(UI.cam)}<span>Toca para tomar la foto</span></button>`}</div>
     <div class="two"><button class="btn btn-primary" data-act="cam">${svg(UI.cam).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}${W.fotoUrl?'Otra foto':'Tomar foto'}</button>
     <button class="btn btn-ghost" data-act="gal">${svg(UI.img).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Galería</button></div>
     ${W.fotoUrl?`<div class="scanbar">${W.bordes==='ok'?`<span class="autolbl">${svg('<path d="m5 12 5 5 9-10"/>').replace('<svg','<svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.6;vertical-align:-2px"')} Hoja recortada y mejorada</span>`:W.bordes==='aprox'?`<span class="note" style="margin:0">Recorté alrededor de la factura. Si quieres, ajusta las esquinas.</span>`:W.bordes==='no'?`<span class="note" style="margin:0">Usé la foto completa mejorada. Si quieres recortarla, toca Ajustar bordes.</span>`:''}
@@ -644,7 +648,7 @@ function renderWz(){
     <div class="cat-grid">${visibleCats().map(c=>`<button class="cat-opt ${d.categoria===c.id?'on':''}" style="--c:${c.c}" data-act="w-cat" data-c="${c.id}">${catIcon(c.id)}${esc(c.n)}</button>`).join('')}
     <button class="cat-opt" style="--c:var(--muted);border-style:dashed" data-act="cat-new"><span class="ico" style="--c:var(--muted)">${svg(UI.plus)}</span>Nueva</button></div>`;
   if(st==='detalle') body=`<div class="q">¿Qué compraste y a quién?</div><p class="hint">${W.auto.size?'<span class="autolbl">Los campos en verde se leyeron de la foto. Corrígelos si hace falta.</span>':'Escribe como en tu hoja. Te sugiero lo que ya has usado.'}</p>
-    <div class="field"><label for="w-detalle">Detalle <small style="font-weight:500">(un producto por línea)</small></label><textarea class="inp ${au('detalle')}" id="w-detalle" data-f="detalle" rows="${Math.min(8,Math.max(3,(d.detalle||'').split('\n').length+1))}" placeholder="Ej.:&#10;CEMENTO HOLCIM 50KG&#10;CLAVOS 2 PULG" autocapitalize="characters" style="resize:vertical;line-height:1.4">${esc(d.detalle)}</textarea></div>
+    <div class="field"><label for="w-detalle">Detalle <small style="font-weight:500">(un producto por línea)</small></label><textarea class="inp ${au('detalle')}" id="w-detalle" data-f="detalle" rows="${Math.min(8,Math.max(3,(d.detalle||'').split('\n').length+1))}" placeholder="• CEMENTO HOLCIM 50KG&#10;• CLAVOS 2 PULG" autocapitalize="characters" style="resize:vertical;line-height:1.5">${esc(conVinetas(d.detalle))}</textarea></div>
     <div class="field"><label for="w-benef">Beneficiario</label><input class="inp ${au('beneficiario')}" id="w-benef" data-f="beneficiario" list="dl-ben" placeholder="Nombre o razón social de la factura" value="${esc(d.beneficiario)}" autocapitalize="characters">${dl('dl-ben','beneficiario')}</div>
     <div class="field"><label for="w-lugar">¿Dónde lo compraste?</label><input class="inp ${au('lugar')}" id="w-lugar" data-f="lugar" list="dl-lug" placeholder="Ej.: KM 24, ARCHIDONA, MERCADO TENA" value="${esc(d.lugar)}" autocapitalize="characters">${dl('dl-lug','lugar')}</div>`;
   if(st==='factura') body=`<div class="q">Factura, fecha y hora</div>
@@ -668,7 +672,7 @@ function renderWz(){
     <div class="review">${W.fotoUrl?`<img class="thumb" src="${W.fotoUrl}" alt="Factura">`:`<div class="rv"><span class="tag warn">${svg(UI.nophoto)}Sin foto de factura</span>${ed(0)}</div>`}
       <div class="rv"><span>Valor</span><b class="num">${money(parseMonto(d.valor))}${ed(1)}</b></div>
       <div class="rv"><span>Categoría</span><b>${esc(c?.n||'—')}${ed(1)}</b></div>
-      <div class="rv"><span>Detalle</span><b>${esc(d.detalle||'—').replace(/\n/g,'<br>')}${ed(2)}</b></div>
+      <div class="rv"><span>Detalle</span><b>${listaDetalle(d.detalle)}${ed(2)}</b></div>
       <div class="rv"><span>Beneficiario</span><b>${esc(d.beneficiario||'—')}${ed(2)}</b></div>
       <div class="rv"><span>Lugar</span><b>${esc(d.lugar||'—')}${ed(2)}</b></div>
       <div class="rv"><span>Factura</span><b class="num">${esc(d.factura||'Sin factura')}${ed(3)}</b></div>
@@ -679,8 +683,9 @@ function renderWz(){
   openLayer(`${sheetHead(W.mode==='persona'?(W.isNew?'Pago a persona':'Editar pago'):(W.isNew?'Nuevo gasto':'Editar gasto'),'wz-close')}
     <div class="steps" aria-label="Paso ${W.step+1} de ${STEPS.length}">${STEPS.map((_,i)=>`<i class="${i<=W.step?'on':''}"></i>`).join('')}</div>
     <div class="wz-body">${W.aviso&&W.aviso.step===W.step?`<div class="ocr ${W.aviso.ok?'ok':''}" role="status" style="margin:0 0 14px"><span>${W.aviso.txt}</span></div>`:''}${W.audioUrl&&W.step===0?`<div class="card" style="margin-bottom:14px"><div class="note" style="margin:0 0 6px">Tu nota de voz${W.d.voz?`: <i>“${esc(W.d.voz)}”</i>`:''}</div><audio controls src="${W.audioUrl}"></audio></div>`:''}${body}</div>
-    <div class="wz-foot">${W.step>0&&!(last&&!W.isNew)?`<button class="btn btn-ghost" data-act="w-back" style="flex:.6">Atrás</button>`:''}
-      ${last?`<button class="btn btn-primary" data-act="w-save">Guardar gasto</button>`:`<button class="btn ${st==='foto'&&!W.fotoUrl?'btn-ghost':'btn-primary'}" data-act="w-next">${skip}</button>`}</div>
+    <div class="wz-foot">${!last&&W.volver?`<button class="btn btn-ghost" data-act="w-listo">Listo</button><button class="btn btn-primary" data-act="w-save">${W.isNew?'Guardar gasto':'Guardar cambios'}</button>`
+      :`${W.step>0&&!(last&&!W.isNew)?`<button class="btn btn-ghost" data-act="w-back" style="flex:.6">Atrás</button>`:''}
+      ${last?`<button class="btn btn-primary" data-act="w-save">${W.isNew?'Guardar gasto':'Guardar cambios'}</button>`:`<button class="btn ${st==='foto'&&!W.fotoUrl?'btn-ghost':'btn-primary'}" data-act="w-next">${skip}</button>`}`}</div>
     <p id="w-err" class="note" style="color:var(--bad)" role="alert"></p>`, true);
   const f=$('.wz-body input:not([type=date])'); if(f && !['factura','pago','cuando'].includes(st) && !f.value) setTimeout(()=>f.focus(),60);
 }
@@ -695,7 +700,7 @@ async function wzSave(){
   const STEPS=steps(); for(let i=0;i<STEPS.length;i++){ W.step=i; const e=wzValid(); if(e){ renderWz(); $('#w-err').textContent=e; return; } }
   W.step=STEPS.length-1; const per=W.mode==='persona';
   const d=W.d, prev=W.isNew?null:S.movs.find(m=>m.id===W.id);
-  const m={ id:W.id||uid(), obraId:prev?.obraId||S.obraId, tipo:'gasto', fecha:d.fecha, hora:d.hora||'', detalle:d.detalle.split('\n').map(x=>x.trim()).filter(Boolean).join('\n').toUpperCase(), beneficiario:d.beneficiario.trim().toUpperCase(), lugar:per?'':d.lugar.trim().toUpperCase(),
+  const m={ id:W.id||uid(), obraId:prev?.obraId||S.obraId, tipo:'gasto', fecha:d.fecha, hora:d.hora||'', detalle:sinVinetas(d.detalle).toUpperCase(), beneficiario:d.beneficiario.trim().toUpperCase(), lugar:per?'':d.lugar.trim().toUpperCase(),
     factura:per?'':d.factura.trim(), ruc:per?'':(d.ruc||prev?.ruc||''), persona:per, pago:d.pago, numero:d.pago==='EFECTIVO'?'':d.numero.trim(), valor:parseMonto(d.valor), categoria:d.categoria, fotoId:prev?.fotoId||null, compId:prev?.compId||null, audioId:prev?.audioId||null, voz:prev?.voz||'', pendiente:false, ocrTexto:W.ocr?.texto??prev?.ocrTexto??'', ocrComp:W.ocrC?.texto??prev?.ocrComp??'', creado:prev?.creado||Date.now(), editado:Date.now() };
   if(d.pago==='EFECTIVO' && W.comp){ W.comp=null; W.compChanged=true; }
   if(W.compChanged){ if(m.compId) await DB.del('fotos',m.compId); m.compId=null; if(W.comp){ m.compId=uid(); await DB.put('fotos',{id:m.compId,blob:W.comp}); } }
@@ -1370,7 +1375,7 @@ async function verMov(id){
   let aurl=null; if(m.audioId){ const f=await DB.get('fotos',m.audioId); if(f) aurl=URL.createObjectURL(f.blob); }
   openLayer(`${sheetHead(ing?'Fondo recibido':'Gasto')}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">${ing?`<span class="ico" style="--c:var(--good)">${svg(IC.INGRESO)}</span>`:catIcon(m.categoria)}
-      <div style="min-width:0"><div style="font-family:var(--f-display);font-size:28px;font-weight:700" class="num">${ing?'+':'−'}${money(m.valor)}</div><div style="color:var(--muted)">${esc(m.detalle).replace(/\n/g,'<br>')}</div></div></div>
+      <div style="min-width:0"><div style="font-family:var(--f-display);font-size:28px;font-weight:700" class="num">${ing?'+':'−'}${money(m.valor)}</div><div style="color:var(--muted)">${listaDetalle(m.detalle)}</div></div></div>
     ${ing?'':(url?`<button style="padding:0;border:0;background:none;width:100%;margin-bottom:12px;border-radius:var(--r);overflow:hidden" data-act="zoom" data-src="${url}"><img class="thumb" src="${url}" alt="Factura"></button>`
       :`<button class="offline" style="width:100%;border-color:var(--warn);color:var(--warn);background:var(--warn-soft);cursor:pointer" data-act="editar" data-id="${m.id}" data-s="0">${svg(UI.nophoto).replace('<svg','<svg style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;flex:none"')}Sin foto de factura. Toca para agregarla.</button>`)}
     ${aurl?`<div class="card" style="margin-bottom:12px"><div class="note" style="margin:0 0 6px">Nota de voz${m.voz?`: <i>“${esc(m.voz)}”</i>`:''}</div><audio controls src="${aurl}"></audio></div>`:''}
@@ -1469,7 +1474,7 @@ async function exportar(scope){
     let r=2;
     for(const m of ms){
       const ing=m.tipo==='ingreso';
-      const row=ws.getRow(r); row.values=[parseISO(m.fecha),m.hora||'',m.detalle,m.beneficiario||'',m.lugar||'-',m.persona?'SIN FACTURA':(m.factura||(m.pendiente?'PENDIENTE':'-')),m.pago,m.numero||'-',ing?m.valor:null,ing?null:m.valor,ing?'':m.categoria,'',''];
+      const row=ws.getRow(r); row.values=[parseISO(m.fecha),m.hora||'',(m.detalle||'').includes('\n')?conVinetas(m.detalle):m.detalle,m.beneficiario||'',m.lugar||'-',m.persona?'SIN FACTURA':(m.factura||(m.pendiente?'PENDIENTE':'-')),m.pago,m.numero||'-',ing?m.valor:null,ing?null:m.valor,ing?'':m.categoria,'',''];
       row.getCell(1).numFmt='dd/mm/yyyy'; row.getCell(9).numFmt='#,##0.00'; row.getCell(10).numFmt='#,##0.00';
       row.eachCell({includeEmpty:true},c=>{c.border=border;c.alignment={vertical:'middle',wrapText:c.col===3||c.col===4||c.col===5};}); { const nl=(m.detalle||'').split('\n').length; if(nl>2) row.height=Math.max(row.height||0,15*nl); }
       for(const [fid,col] of [[m.fotoId,11],[m.compId,12]]){ if(!fid) continue; const f=await DB.get('fotos',fid); if(f){ const sm=await compress(f.blob,1000,.72); const b64=await blobToDataURL(sm.blob);
@@ -1527,7 +1532,7 @@ document.addEventListener('click',async e=>{
   switch(a){
     case 'view': S.view=b.dataset.v; S.cat=null; render(); scrollTo(0,0); if(S.view==='mas') showStorage(); if(S.view==='asistente'){ cargarThumbs(); setTimeout(()=>scrollTo(0,document.body.scrollHeight),30); } break;
     case 'nuevo-gasto': elegirTipo(); break;
-    case 'nuevo-factura': nuevoGasto('factura'); W.photoT='fact'; $('#f-cam').click(); break;
+    case 'nuevo-factura': nuevoGasto('factura'); break;
     case 'voz': abrirVoz(); break;
     case 'fondo': abrirFondo(); break;
     case 'fondo-set': store.set('bal',{...store.get('bal',{}),tipo:b.dataset.t}); closeLayer(); render(); toast('Fondo cambiado'); break;
@@ -1580,12 +1585,13 @@ document.addEventListener('click',async e=>{
     case 'w-pago': W.d.pago=b.dataset.p; renderWz(); break;
     case 'w-next': { const err=wzValid(); if(err){ $('#w-err').textContent=err; return; } W.step++; renderWz(); break; }
     case 'w-back': W.step--; W.aviso=null; renderWz(); break;
-    case 'w-go': W.step=+b.dataset.s; W.aviso=null; renderWz(); break;
+    case 'w-go': W.step=+b.dataset.s; W.aviso=null; if(W.step<steps().length-1) W.volver=true; renderWz(); break;
+    case 'w-listo': { const err=wzValid(); if(err){ $('#w-err').textContent=err; return; } W.step=steps().length-1; W.volver=false; renderWz(); break; }
     case 'w-save': b.disabled=true; await wzSave(); break;
     case 'ver': verMov(b.dataset.id); break;
     case 'zoom': { const v=document.createElement('div'); v.className='viewer'; v.innerHTML=`<img src="${b.dataset.src}" alt="Factura"><button class="x" aria-label="Cerrar">${svg(UI.x)}</button>`;
       v.addEventListener('click',ev=>{ if(ev.target.closest('.x')) v.remove(); else v.classList.toggle('zoom'); }); document.body.appendChild(v); break; }
-    case 'editar': { const m=S.movs.find(x=>x.id===b.dataset.id); closeLayer(); if(m.tipo==='ingreso') formIngreso(m); else { await editarGasto(m); if(b.dataset.s){ W.step=+b.dataset.s; renderWz(); } } break; }
+    case 'editar': { const m=S.movs.find(x=>x.id===b.dataset.id); closeLayer(); if(m.tipo==='ingreso') formIngreso(m); else { await editarGasto(m); if(b.dataset.s){ W.step=+b.dataset.s; W.volver=true; renderWz(); } } break; }
     case 'borrar': { if(!arm(b,'del'+b.dataset.id,'Toca otra vez para eliminar')) return; const m=S.movs.find(x=>x.id===b.dataset.id); if(m.fotoId) await DB.del('fotos',m.fotoId); if(m.compId) await DB.del('fotos',m.compId); if(m.audioId && !S.movs.some(x=>x.id!==m.id&&x.audioId===m.audioId)) await DB.del('fotos',m.audioId); await DB.del('movs',m.id); await loadAll(); closeLayer(); render(); toast('Movimiento eliminado'); break; }
     case 'filtro-cat': S.cat = b.dataset.c && S.cat!==b.dataset.c ? b.dataset.c : null; render(); break;
     case 'periodo': S.periodo=b.dataset.p; render(); break;
@@ -1611,7 +1617,7 @@ document.addEventListener('input',e=>{
   if(t.id==='q'){ S.q=t.value; const ms=movsObra(); const lista=sortMovs(filtrar(ms)); const grupos=[]; let g=null; for(const m of lista){ if(!g||g.f!==m.fecha){g={f:m.fecha,items:[],tot:0};grupos.push(g);} g.items.push(m); if(m.tipo==='gasto') g.tot+=m.valor; } $('#lista').innerHTML=listaHTML(grupos); return; }
   if(W && t.dataset.f){
     if(t.dataset.f==='factura'){ const f=fmtFactura(t.value); if(f!==t.value){ t.value=f; } }
-    W.d[t.dataset.f]=t.value; $('#w-err')&&($('#w-err').textContent=''); W.touched=W.touched||new Set(); W.touched.add(t.dataset.f); if(W.auto.delete(t.dataset.f)) t.classList.remove('auto'), t.closest('.money')?.classList.remove('auto');
+    W.d[t.dataset.f]= t.dataset.f==='detalle'&&t.tagName==='TEXTAREA'? sinVinetas(t.value) : t.value; $('#w-err')&&($('#w-err').textContent=''); W.touched=W.touched||new Set(); W.touched.add(t.dataset.f); if(W.auto.delete(t.dataset.f)) t.classList.remove('auto'), t.closest('.money')?.classList.remove('auto');
     if(t.dataset.f==='beneficiario' && !W.d.lugar){ const p=S.movs.find(m=>m.beneficiario===t.value.toUpperCase()&&m.lugar); if(p){ W.d.lugar=p.lugar; const l=$('#w-lugar'); if(l) l.value=p.lugar; } }
   }
 });
@@ -1621,6 +1627,8 @@ document.addEventListener('change',e=>{ if(W && e.target.id==='w-fecha'){ W.d.fe
 document.addEventListener('input',e=>{ if(e.target.dataset.cf){ CF[e.target.dataset.cf]=e.target.value; if(e.target.dataset.cf==='emoji'){ CF.img=null; } refreshCF(); } });
 document.addEventListener('submit',e=>{ e.preventDefault(); if(e.target.id==='f-ask'){ const i=$('#ask-q'); const v=i.value.trim(); if(!v) return; if(S.modo==='claude'){ if(!S.pensando) preguntarClaude(v); } else preguntar(v); return; }
   if(e.target.id==='f-key'){ const k=String(new FormData(e.target).get('k')||'').trim(); store.set('claudeKey',k); closeLayer(); render(); toast(k?'Clave guardada':'Clave borrada'); return; } if(e.target.id==='f-ing') saveIngreso(e.target); if(e.target.id==='f-obra') saveObra(e.target); });
+document.addEventListener('keydown',e=>{ if(e.key==='Enter' && e.target.id==='w-detalle' && e.target.tagName==='TEXTAREA'){ e.preventDefault(); const t=e.target, a=t.selectionStart; t.setRangeText('\n• ',a,t.selectionEnd,'end'); t.dispatchEvent(new Event('input',{bubbles:true})); } });
+document.addEventListener('focusin',e=>{ const t=e.target; if(t.id==='w-detalle'&&t.tagName==='TEXTAREA'&&!t.value){ t.value='• '; } });
 document.addEventListener('keydown',e=>{ if(e.key==='Enter' && W && e.target.matches('.wz-body input') && steps()[W.step]!=='revisar'){ e.preventDefault(); $('[data-act="w-next"]')?.click(); } });
 $('#f-cam').addEventListener('change',e=>{ onFoto(e.target.files[0]); e.target.value=''; });
 $('#f-gal').addEventListener('change',e=>{ onFoto(e.target.files[0]); e.target.value=''; });
