@@ -430,7 +430,7 @@ const S = { chat:[], chatC:[], claudeMsgs:[], modo:'jarvis', pensando:false, obr
 const obra = () => S.obras.find(o=>o.id===S.obraId);
 const movsObra = (id=S.obraId) => S.movs.filter(m=>m.obraId===id);
 function totales(list){ let ing=0,gas=0; for(const m of list){ if(m.tipo==='ingreso') ing+=m.valor; else gas+=m.valor; } return {ing:r2(ing),gas:r2(gas),saldo:r2(ing-gas)}; }
-const sortMovs = a => a.slice().sort((x,y)=> y.fecha.localeCompare(x.fecha) || (y.creado||0)-(x.creado||0));
+const sortMovs = a => a.slice().sort((x,y)=> y.fecha.localeCompare(x.fecha) || (y.hora||'').localeCompare(x.hora||'') || (y.creado||0)-(x.creado||0));
 
 async function loadCats(){ let cs=await DB.all('cats'); if(!cs.length){ cs=DEFAULT_CATS.map((c,i)=>({...c,orden:i})); await DB.putMany('cats',cs); } CATS=cs.sort((a,b)=>(a.orden??99)-(b.orden??99)); CAT=Object.fromEntries(CATS.map(c=>[c.id,c])); }
 async function loadAll(){ await loadCats(); S.obras=(await DB.all('obras')).sort((a,b)=>(a.creada||0)-(b.creada||0)); S.movs=await DB.all('movs'); if(!S.obras.find(o=>o.id===S.obraId)) S.obraId = S.obras[0]?.id||null; }
@@ -953,13 +953,16 @@ function escanearDoc(origC,quad,filtro='mejorada'){
   return new Promise(resolve=>{
     let q=(quad||QUAD_DEF).map(p=>p.slice()), paso='esquinas', outC=null, fil=filtro;
     const root=document.createElement('div'); root.className='crop'; root.setAttribute('role','dialog'); root.setAttribute('aria-modal','true'); $('#layer').appendChild(root);
-    const url=origC.toDataURL('image/jpeg',.75);
+    let url=origC.toDataURL('image/jpeg',.75);
+    const GIRO=`<div class="chips" style="justify-content:center;padding:8px 16px 0"><button class="chip" data-sc="rot" data-d="-1">↺ Girar a la izquierda</button><button class="chip" data-sc="rot" data-d="1">Girar a la derecha ↻</button></div>`;
+    const girar=d=>{ const c=document.createElement('canvas'); c.width=origC.height; c.height=origC.width; const x=c.getContext('2d'); x.translate(c.width/2,c.height/2); x.rotate(d*Math.PI/2); x.drawImage(origC,-origC.width/2,-origC.height/2); origC=c; url=c.toDataURL('image/jpeg',.75);
+      const m=d>0?(([a,b])=>[1-b,a]):(([a,b])=>[b,1-a]), r=q.map(m); q= d>0?[r[3],r[0],r[1],r[2]]:[r[1],r[2],r[3],r[0]]; };
     const fin=v=>{ root.remove(); resolve(v); };
     const pintar=()=>{
       if(paso==='esquinas'){
         root.innerHTML=`<div class="crop-top"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">1. Ajusta las esquinas</b><button class="link" style="color:#fff" data-sc="x">Cancelar</button></div><span>Arrastra los puntos naranja a las esquinas del documento</span></div>
           <div class="crop-stage"><div class="crop-img" id="crop-img"><img src="${url}" alt=""><svg viewBox="0 0 1 1" preserveAspectRatio="none"><polygon id="crop-poly" points=""/></svg>${[0,1,2,3].map(i=>`<button class="crop-h" data-h="${i}" aria-label="Esquina ${i+1}"></button>`).join('')}</div><canvas class="lupa" id="lupa" width="240" height="240" hidden></canvas></div>
-          <div class="crop-foot"><button class="btn btn-ghost" data-sc="todo">Toda</button><button class="btn btn-ghost" data-sc="auto">Auto</button><button class="btn btn-primary" data-sc="sig">Siguiente</button></div>`;
+          ${GIRO}<div class="crop-foot"><button class="btn btn-ghost" data-sc="todo">Toda</button><button class="btn btn-ghost" data-sc="auto">Auto</button><button class="btn btn-primary" data-sc="sig">Siguiente</button></div>`;
         const box=root.querySelector('#crop-img'), img=box.querySelector('img'), lupa=root.querySelector('#lupa'), lx=lupa.getContext('2d');
         const fit=()=>{ const st=root.querySelector('.crop-stage').getBoundingClientRect(), r=origC.width/origC.height; let bw=st.width-36, bh=bw/r; if(bh>st.height-36){ bh=st.height-36; bw=bh*r; } box.style.width=bw+'px'; box.style.height=bh+'px'; dib(); };
         const dib=()=>{ root.querySelector('#crop-poly').setAttribute('points',q.map(p=>p.join(',')).join(' ')); root.querySelectorAll('.crop-h').forEach((h,i)=>{ h.style.left=(q[i][0]*100)+'%'; h.style.top=(q[i][1]*100)+'%'; }); };
@@ -974,7 +977,7 @@ function escanearDoc(origC,quad,filtro='mejorada'){
       } else {
         root.innerHTML=`<div class="crop-top"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">2. Elige cómo se ve</b><button class="link" style="color:#fff" data-sc="x">Cancelar</button></div><span>Mejorada deja el fondo blanco y el texto nítido</span></div>
           <div class="crop-stage"><img class="crop-prev" id="sc-prev" alt="Documento escaneado"></div>
-          <div class="chips" style="justify-content:center;padding:10px 16px 0">${[['mejorada','Mejorada'],['bn','Blanco y negro'],['original','Original']].map(([k,n])=>`<button class="chip ${fil===k?'on':''}" data-sc="f" data-f="${k}">${n}</button>`).join('')}</div>
+          <div class="chips" style="justify-content:center;padding:10px 16px 0">${[['mejorada','Mejorada'],['bn','Blanco y negro'],['original','Original']].map(([k,n])=>`<button class="chip ${fil===k?'on':''}" data-sc="f" data-f="${k}">${n}</button>`).join('')}</div>${GIRO}
           <div class="crop-foot"><button class="btn btn-ghost" data-sc="volver">Esquinas</button><button class="btn btn-primary" data-sc="usar">Usar foto</button></div>`;
         procesar();
       }
@@ -984,6 +987,7 @@ function escanearDoc(origC,quad,filtro='mejorada'){
       if(a==='x') return fin(null);
       if(a==='todo'){ q=QUAD_TODO.map(p=>p.slice()); root._dib(); }
       if(a==='auto'){ const r=detectarHoja(origC,true); if(r){ q=r.q; root._dib(); } else toast('No encontré el documento. Mueve los puntos a mano.'); }
+      if(a==='rot'){ girar(+b.dataset.d); if(paso==='esquinas') pintar(); else await procesar(); }
       if(a==='sig'){ paso='filtro'; pintar(); }
       if(a==='volver'){ paso='esquinas'; pintar(); }
       if(a==='f'){ fil=b.dataset.f; root.querySelectorAll('[data-sc="f"]').forEach(c=>c.classList.toggle('on',c===b)); await procesar(); }
@@ -1515,7 +1519,7 @@ async function exportar(scope){
     const ws=wb.addWorksheet(nm,{views:[{state:'frozen',ySplit:1}]});
     ws.columns=[{header:'FECHA',width:12},{header:'HORA',width:8},{header:'DETALLE',width:34},{header:'BENEFICIARIO',width:34},{header:'LUGAR O LOGO',width:20},{header:'FACTURA',width:20},{header:'# CHEQ O TRASFE',width:17},{header:'NUMERO',width:14},{header:'CREDITO',width:12},{header:'DEBITO',width:12},{header:'CATEGORIA',width:15},{header:'FOTO FACTURA',width:20},{header:'FOTO COMPROBANTE',width:20}];
     ws.getRow(1).height=30; ws.getRow(1).eachCell(c=>{Object.assign(c,{font:head.font,fill:head.fill,alignment:head.alignment,border});});
-    const ms=movsObra(o.id).slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.creado||0)-(b.creado||0));
+    const ms=movsObra(o.id).slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||'')||(a.creado||0)-(b.creado||0));
     let r=2;
     for(const m of ms){
       const ing=m.tipo==='ingreso';
