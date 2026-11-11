@@ -224,6 +224,9 @@ audio{width:100%;height:40px}
 .cat-opt.on{border-color:var(--c);box-shadow:0 0 0 1.5px var(--c) inset;background:color-mix(in srgb,var(--c) 8%,var(--surface))}
 .photo-box{border:2px dashed var(--line);border-radius:18px;background:var(--surface);min-height:220px;display:grid;place-items:center;overflow:hidden;position:relative}
 .vin{margin:0;padding-left:18px;text-align:left;display:inline-block}.vin li{margin:1px 0}
+.lupa{position:absolute;top:10px;width:120px;height:120px;border-radius:50%;border:3px solid #fff;box-shadow:0 4px 14px rgba(0,0,0,.5);pointer-events:none;z-index:2}
+.crop .chip{background:transparent;color:#fff;border-color:#4a5560}.crop .chip.on{background:#fff;color:#0d1318;border-color:#fff}
+.crop-stage{position:relative}.crop-prev{max-width:calc(100% - 32px);max-height:100%;object-fit:contain;background:#fff;box-shadow:0 6px 24px rgba(0,0,0,.5);transition:opacity .15s}
 .scanbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .scanbar .chip{padding:6px 12px;font-size:13px}
 .scanbar>.autolbl,.scanbar>.note{width:100%}
@@ -624,8 +627,7 @@ function renderWz(){
     <div class="photo-box">${W.fotoUrl?`<img src="${W.fotoUrl}" alt="Foto de la factura">`:`<button class="photo-ph" data-act="cam" style="border:0;background:none;width:100%;min-height:220px;cursor:pointer">${svg(UI.cam)}<span>Toca para tomar la foto</span></button>`}</div>
     <div class="two"><button class="btn btn-primary" data-act="cam">${svg(UI.cam).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}${W.fotoUrl?'Otra foto':'Tomar foto'}</button>
     <button class="btn btn-ghost" data-act="gal">${svg(UI.img).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Galería</button></div>
-    ${W.fotoUrl?`<div class="scanbar">${W.bordes==='ok'?`<span class="autolbl">${svg('<path d="m5 12 5 5 9-10"/>').replace('<svg','<svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.6;vertical-align:-2px"')} Hoja recortada y mejorada</span>`:W.bordes==='aprox'?`<span class="note" style="margin:0">Recorté alrededor de la factura. Si quieres, ajusta las esquinas.</span>`:W.bordes==='no'?`<span class="note" style="margin:0">Usé la foto completa mejorada. Si quieres recortarla, toca Ajustar bordes.</span>`:''}
-      <button class="chip" data-act="bordes">Ajustar bordes</button>${W.origC?`<button class="chip ${W.scanModo==='original'?'on':''}" data-act="scan-modo">${W.scanModo==='original'?'Ver escaneada':'Ver original'}</button>`:''}</div>`:''}
+    ${W.fotoUrl?`<div class="scanbar"><button class="chip" data-act="bordes" data-t="fact">${svg('<path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14"/>').replace('<svg','<svg style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:-2px;margin-right:4px"')}Ajustar esquinas y filtro</button></div>`:''}
     ${ocrHTML()}
     ${W.fotoUrl?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button class="link" data-act="quitar-foto">Quitar foto</button>${W.ocr&&W.ocr.estado!=='leyendo'?`<button class="link" data-act="releer">Leer otra vez</button>`:''}${W.ocr&&W.ocr.estado==='listo'&&W.ocr.campos.length?`<button class="link" data-act="w-go" data-s="${steps().length-1}">Ir a revisar</button>`:''}</div>`:''}`;
   if(st==='persona'){ const top=sugerencias('beneficiario',true).slice(0,6);
@@ -909,7 +911,7 @@ function homografia(dst,src){ // H tal que src ~ H*dst  (8 incógnitas)
     for(let r=0;r<8;r++){ if(r===i) continue; const f=A[r][i]/A[i][i]; for(let c=i;c<8;c++) A[r][c]-=f*A[i][c]; B[r]-=f*B[i]; } }
   return B.map((b,i)=>b/A[i][i]).concat(1); }
 /* endereza la hoja (esquinas normalizadas) y le da aspecto de escaneo */
-function enderezar(src,quad,mejorar=true){
+function enderezar(src,quad,filtro='mejorada'){
   const W0=src.width,H0=src.height, q=quad.map(([a,b])=>[a*W0,b*H0]), dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
   let ow=Math.max(dist(q[0],q[1]),dist(q[3],q[2])), oh=Math.max(dist(q[0],q[3]),dist(q[1],q[2])); const s=Math.min(1,1800/Math.max(ow,oh)); ow=Math.max(1,Math.round(ow*s)); oh=Math.max(1,Math.round(oh*s));
   const sc=document.createElement('canvas'); sc.width=W0; sc.height=H0; const sx=sc.getContext('2d',{willReadFrequently:true}); sx.drawImage(src,0,0); const sp=sx.getImageData(0,0,W0,H0).data;
@@ -918,43 +920,88 @@ function enderezar(src,quad,mejorar=true){
   for(let y=0;y<oh;y++){ const yy=y+.5; for(let X=0;X<ow;X++){ const xx=X+.5, z=Hm[6]*xx+Hm[7]*yy+1; let u=(Hm[0]*xx+Hm[1]*yy+Hm[2])/z-.5, v=(Hm[3]*xx+Hm[4]*yy+Hm[5])/z-.5;
       if(u<0)u=0; if(v<0)v=0; if(u>W0-1.001)u=W0-1.001; if(v>H0-1.001)v=H0-1.001; const x0=u|0,y0=v|0,fx=u-x0,fy=v-y0, i00=(y0*W0+x0)*4, i10=i00+4, i01=i00+W0*4, i11=i01+4, o=(y*ow+X)*4;
       for(let ch=0;ch<3;ch++) op[o+ch]=(sp[i00+ch]*(1-fx)+sp[i10+ch]*fx)*(1-fy)+(sp[i01+ch]*(1-fx)+sp[i11+ch]*fx)*fy; op[o+3]=255; } }
-  if(mejorar) mejorarScan(out,ow,oh);
+  if(filtro!=='original') mejorarScan(out,ow,oh,filtro);
   ox.putImageData(out,0,0); return oc; }
 /* quita sombras y deja el papel blanco y la tinta oscura, sin perder sellos de color */
-function mejorarScan(img,w,h){
+/* quita sombras y deja el papel blanco puro; filtro 'mejorada' (color) o 'bn' (blanco y negro) */
+function mejorarScan(img,w,h,filtro='mejorada'){
   const p=img.data, bw=Math.max(4,Math.round(w/24)), bh=Math.max(4,Math.round(h/24)), cs=bw*bh;
-  // brillo del papel por bloque: percentil alto (ignora la tinta)
   const bg=new Float32Array(cs), cellW=w/bw, cellH=h/bh;
   for(let by=0;by<bh;by++) for(let bx=0;bx<bw;bx++){ const hs=new Uint16Array(256); let n=0; const x1=Math.floor(bx*cellW),x2=Math.floor((bx+1)*cellW),y1=Math.floor(by*cellH),y2=Math.floor((by+1)*cellH);
     for(let y=y1;y<y2;y+=2) for(let x=x1;x<x2;x+=2){ const i=(y*w+x)*4; hs[(.299*p[i]+.587*p[i+1]+.114*p[i+2])|0]++; n++; }
     let acc=0,t=255; for(let v=255;v>=0;v--){ acc+=hs[v]; if(acc>=n*.1){t=v;break;} } bg[by*bw+bx]=Math.max(40,t); }
-  // suavizar el mapa de fondo
   for(let pass=0;pass<2;pass++){ const c=bg.slice(); for(let y=0;y<bh;y++) for(let x=0;x<bw;x++){ let s=0,n=0; for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){ const X=x+dx,Y=y+dy; if(X>=0&&Y>=0&&X<bw&&Y<bh){ s+=c[Y*bw+X]; n++; } } bg[y*bw+x]=s/n; } }
-  const B=(x,y)=>{ let gx=x/cellW-.5, gy=y/cellH-.5; if(gx<0)gx=0; if(gy<0)gy=0; if(gx>bw-1)gx=bw-1; if(gy>bh-1)gy=bh-1; const x0=Math.floor(gx),y0=Math.floor(gy),x1=Math.min(bw-1,x0+1),y1=Math.min(bh-1,y0+1),fx=gx-x0,fy=gy-y0;
-    return (bg[y0*bw+x0]*(1-fx)+bg[y0*bw+x1]*fx)*(1-fy)+(bg[y1*bw+x0]*(1-fx)+bg[y1*bw+x1]*fx)*fy; };
-  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=(y*w+x)*4, f=255/B(x,y);
-    for(let ch=0;ch<3;ch++){ let v=p[i+ch]*f; v=(v-55)*1.32; v=v<0?0:v>255?255:v; p[i+ch]=v>238?255:v; } }
+  // mapa de fondo a resolución completa (interpolado)
+  const N=w*h, L=new Float32Array(N), F=new Float32Array(N);
+  for(let y=0;y<h;y++){ let gy=y/cellH-.5; if(gy<0)gy=0; if(gy>bh-1)gy=bh-1; const y0=Math.floor(gy),y1=Math.min(bh-1,y0+1),fy=gy-y0;
+    for(let x=0;x<w;x++){ let gx=x/cellW-.5; if(gx<0)gx=0; if(gx>bw-1)gx=bw-1; const x0=Math.floor(gx),x1=Math.min(bw-1,x0+1),fx=gx-x0;
+      const B=(bg[y0*bw+x0]*(1-fx)+bg[y0*bw+x1]*fx)*(1-fy)+(bg[y1*bw+x0]*(1-fx)+bg[y1*bw+x1]*fx)*fy, j=y*w+x, i=j*4;
+      F[j]=255/B; L[j]=Math.min(1.2,(.299*p[i]+.587*p[i+1]+.114*p[i+2])/B); } }
+  // nitidez: realce de bordes sobre el brillo normalizado
+  const bl=new Float32Array(N); for(let y=0;y<h;y++) for(let x=0;x<w;x++){ let s=0,n=0; for(let dy=-1;dy<=1;dy++){ const yy=y+dy; if(yy<0||yy>=h) continue; for(let dx=-1;dx<=1;dx++){ const xx=x+dx; if(xx<0||xx>=w) continue; s+=L[yy*w+xx]; n++; } } bl[y*w+x]=s/n; }
+  for(let j=0;j<N;j++){ const i=j*4; let n=L[j]+.9*(L[j]-bl[j]);
+    if(filtro==='bn'){ let v= n>=.80?255 : n<=.55?0 : (n-.55)/.25*255; p[i]=p[i+1]=p[i+2]=v; continue; }
+    if(n>=.86){ p[i]=p[i+1]=p[i+2]=255; continue; } // papel: blanco puro
+    const t=Math.max(0,(n-.18)/.68), k=Math.pow(t,1.35)/(L[j]||.01); // oscurece la tinta
+    for(let ch=0;ch<3;ch++){ let v=p[i+ch]*F[j]/255; v=v*k*255; p[i+ch]=v<0?0:v>255?255:v; } }
 }
-async function blobDeCanvas(c,q=.82){ return await new Promise(r=>c.toBlob(r,'image/jpeg',q)); }
+async function blobDeCanvas(c,q=.85){ return await new Promise(r=>c.toBlob(r,'image/jpeg',q)); }
 async function bitmapDe(blob,max=2400){ const url=URL.createObjectURL(blob); try{ const img=await loadImg(url); const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)); const c=document.createElement('canvas'); c.width=Math.round(img.naturalWidth*s); c.height=Math.round(img.naturalHeight*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; } finally{ URL.revokeObjectURL(url); } }
-const QUAD_TODO=[[0,0],[1,0],[1,1],[0,1]];
-/* aplica el escaneo con las esquinas y el modo guardados en W */
-async function aplicarScan(){ const c=W.origC; let out;
-  if(W.scanModo==='original') out=c; else out=enderezar(c,W.quad||QUAD_TODO,true);
-  const blob=await blobDeCanvas(out); if(W.fotoUrl) URL.revokeObjectURL(W.fotoUrl); W.foto=blob; W.fotoUrl=URL.createObjectURL(blob); W.fotoChanged=true; }
-/* editor de bordes: 4 puntos que se arrastran */
-function abrirBordes(){ if(!W||!W.origC) return; W.qEdit=(W.quad||QUAD_TODO).map(p=>p.slice()); const url=W.origC.toDataURL('image/jpeg',.7);
-  $('#layer').insertAdjacentHTML('beforeend',`<div class="crop" id="crop" role="dialog" aria-modal="true" aria-label="Ajustar bordes"><div class="crop-top"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">Ajusta las esquinas</b><button class="link" style="color:#fff" data-act="crop-x">Cancelar</button></div><span>Arrastra los puntos a las esquinas de la hoja</span></div>
-    <div class="crop-stage"><div class="crop-img" id="crop-img"><img src="${url}" alt=""><svg id="crop-svg" viewBox="0 0 1 1" preserveAspectRatio="none"><polygon id="crop-poly" points=""/></svg>${[0,1,2,3].map(i=>`<button class="crop-h" data-h="${i}" aria-label="Esquina ${i+1}"></button>`).join('')}</div></div>
-    <div class="crop-foot"><button class="btn btn-ghost" data-act="crop-todo">Toda la foto</button><button class="btn btn-ghost" data-act="crop-auto">Automático</button><button class="btn btn-primary" data-act="crop-ok">Listo</button></div></div>`);
-  const box=$('#crop-img'), img=box.querySelector('img'); const fit=()=>{ const st=$('.crop-stage').getBoundingClientRect(), r=W.origC.width/W.origC.height; let bw=st.width-28, bh=bw/r; if(bh>st.height-28){ bh=st.height-28; bw=bh*r; } box.style.width=bw+'px'; box.style.height=bh+'px'; dibujarBordes(); };
-  img.onload=fit; setTimeout(fit,30);
-  let drag=-1; box.addEventListener('pointerdown',e=>{ const hd=e.target.closest('.crop-h'); const r=box.getBoundingClientRect(); const pt=[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height];
-    drag= hd? +hd.dataset.h : W.qEdit.map((q,i)=>[Math.hypot(q[0]-pt[0],q[1]-pt[1]),i]).sort((a,b)=>a[0]-b[0])[0][1]; box.setPointerCapture(e.pointerId); e.preventDefault(); });
-  box.addEventListener('pointermove',e=>{ if(drag<0) return; const r=box.getBoundingClientRect(); W.qEdit[drag]=[Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))]; dibujarBordes(); });
-  const fin=()=>{drag=-1;}; box.addEventListener('pointerup',fin); box.addEventListener('pointercancel',fin); }
-function dibujarBordes(){ const q=W&&W.qEdit; if(!q) return; $('#crop-poly')?.setAttribute('points',q.map(p=>p.join(',')).join(' ')); document.querySelectorAll('.crop-h').forEach((h,i)=>{ h.style.left=(q[i][0]*100)+'%'; h.style.top=(q[i][1]*100)+'%'; }); }
-async function cerrarBordes(ok){ const el=$('#crop'); if(ok){ W.quad=W.qEdit; W.bordes='ok'; W.scanModo='mejorada'; toast('Enderezando…'); await aplicarScan(); $('.toast').hidden=true; } el&&el.remove(); W.qEdit=null; renderWz(); if(ok) autoLeer(true); }
+const QUAD_TODO=[[0,0],[1,0],[1,1],[0,1]], QUAD_DEF=[[.05,.05],[.95,.05],[.95,.95],[.05,.95]];
+/* escáner a pantalla completa: 1) esquinas con lupa  2) filtro.  Devuelve {blob,origC,quad,filtro} o null si se cancela */
+function escanearDoc(origC,quad,filtro='mejorada'){
+  return new Promise(resolve=>{
+    let q=(quad||QUAD_DEF).map(p=>p.slice()), paso='esquinas', outC=null, fil=filtro;
+    const root=document.createElement('div'); root.className='crop'; root.setAttribute('role','dialog'); root.setAttribute('aria-modal','true'); $('#layer').appendChild(root);
+    const url=origC.toDataURL('image/jpeg',.75);
+    const fin=v=>{ root.remove(); resolve(v); };
+    const pintar=()=>{
+      if(paso==='esquinas'){
+        root.innerHTML=`<div class="crop-top"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">1. Ajusta las esquinas</b><button class="link" style="color:#fff" data-sc="x">Cancelar</button></div><span>Arrastra los puntos naranja a las esquinas del documento</span></div>
+          <div class="crop-stage"><div class="crop-img" id="crop-img"><img src="${url}" alt=""><svg viewBox="0 0 1 1" preserveAspectRatio="none"><polygon id="crop-poly" points=""/></svg>${[0,1,2,3].map(i=>`<button class="crop-h" data-h="${i}" aria-label="Esquina ${i+1}"></button>`).join('')}</div><canvas class="lupa" id="lupa" width="240" height="240" hidden></canvas></div>
+          <div class="crop-foot"><button class="btn btn-ghost" data-sc="todo">Toda</button><button class="btn btn-ghost" data-sc="auto">Auto</button><button class="btn btn-primary" data-sc="sig">Siguiente</button></div>`;
+        const box=root.querySelector('#crop-img'), img=box.querySelector('img'), lupa=root.querySelector('#lupa'), lx=lupa.getContext('2d');
+        const fit=()=>{ const st=root.querySelector('.crop-stage').getBoundingClientRect(), r=origC.width/origC.height; let bw=st.width-36, bh=bw/r; if(bh>st.height-36){ bh=st.height-36; bw=bh*r; } box.style.width=bw+'px'; box.style.height=bh+'px'; dib(); };
+        const dib=()=>{ root.querySelector('#crop-poly').setAttribute('points',q.map(p=>p.join(',')).join(' ')); root.querySelectorAll('.crop-h').forEach((h,i)=>{ h.style.left=(q[i][0]*100)+'%'; h.style.top=(q[i][1]*100)+'%'; }); };
+        const verLupa=(pt)=>{ lupa.hidden=false; const sx=pt[0]*origC.width, sy=pt[1]*origC.height, R=origC.width/ (box.getBoundingClientRect().width||1) * 40; lx.fillStyle='#000'; lx.fillRect(0,0,240,240); lx.drawImage(origC,sx-R,sy-R,2*R,2*R,0,0,240,240); lx.strokeStyle='#EE6420'; lx.lineWidth=3; lx.beginPath(); lx.moveTo(120,95); lx.lineTo(120,145); lx.moveTo(95,120); lx.lineTo(145,120); lx.stroke();
+          lupa.style.left= pt[0]<.5? '' : '14px'; lupa.style.right= pt[0]<.5? '14px':''; };
+        img.onload=fit; setTimeout(fit,30); dib();
+        let drag=-1; const pos=e=>{ const r=box.getBoundingClientRect(); return [Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))]; };
+        box.addEventListener('pointerdown',e=>{ const hd=e.target.closest('.crop-h'), pt=pos(e); drag= hd? +hd.dataset.h : q.map((c,i)=>[Math.hypot(c[0]-pt[0],c[1]-pt[1]),i]).sort((a,b)=>a[0]-b[0])[0][1]; box.setPointerCapture(e.pointerId); e.preventDefault(); verLupa(q[drag]); });
+        box.addEventListener('pointermove',e=>{ if(drag<0) return; q[drag]=pos(e); dib(); verLupa(q[drag]); });
+        const up=()=>{ drag=-1; lupa.hidden=true; }; box.addEventListener('pointerup',up); box.addEventListener('pointercancel',up);
+        root._dib=dib;
+      } else {
+        root.innerHTML=`<div class="crop-top"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">2. Elige cómo se ve</b><button class="link" style="color:#fff" data-sc="x">Cancelar</button></div><span>Mejorada deja el fondo blanco y el texto nítido</span></div>
+          <div class="crop-stage"><img class="crop-prev" id="sc-prev" alt="Documento escaneado"></div>
+          <div class="chips" style="justify-content:center;padding:10px 16px 0">${[['mejorada','Mejorada'],['bn','Blanco y negro'],['original','Original']].map(([k,n])=>`<button class="chip ${fil===k?'on':''}" data-sc="f" data-f="${k}">${n}</button>`).join('')}</div>
+          <div class="crop-foot"><button class="btn btn-ghost" data-sc="volver">Esquinas</button><button class="btn btn-primary" data-sc="usar">Usar foto</button></div>`;
+        procesar();
+      }
+    };
+    const procesar=async()=>{ const pv=root.querySelector('#sc-prev'); if(pv) pv.style.opacity=.4; await new Promise(r=>setTimeout(r,30)); outC=enderezar(origC,q,fil); if(pv){ pv.src=outC.toDataURL('image/jpeg',.8); pv.style.opacity=1; } };
+    root.addEventListener('click',async e=>{ const b=e.target.closest('[data-sc]'); if(!b) return; const a=b.dataset.sc;
+      if(a==='x') return fin(null);
+      if(a==='todo'){ q=QUAD_TODO.map(p=>p.slice()); root._dib(); }
+      if(a==='auto'){ const r=detectarHoja(origC,true); if(r){ q=r.q; root._dib(); } else toast('No encontré el documento. Mueve los puntos a mano.'); }
+      if(a==='sig'){ paso='filtro'; pintar(); }
+      if(a==='volver'){ paso='esquinas'; pintar(); }
+      if(a==='f'){ fil=b.dataset.f; root.querySelectorAll('[data-sc="f"]').forEach(c=>c.classList.toggle('on',c===b)); await procesar(); }
+      if(a==='usar'){ b.disabled=true; if(!outC) await procesar(); const blob=await blobDeCanvas(outC); fin({blob,origC,quad:q,filtro:fil}); }
+    });
+    pintar();
+  });
+}
+/* abre el escáner para la factura ('fact') o el comprobante ('comp') */
+async function escanearPara(t,file){
+  const yo=W; let origC, quad, filtro='mejorada';
+  if(file){ toast('Abriendo la foto…'); origC=await bitmapDe(file,2400); $('.toast').hidden=true; await new Promise(r=>setTimeout(r,20)); const r=detectarHoja(origC,true); quad=r&&r.q; }
+  else { const s=W.sc&&W.sc[t]; if(s){ origC=s.origC; quad=s.quad; filtro=s.filtro; } else { const b=t==='comp'?W.comp:W.foto; if(!b) return; origC=await bitmapDe(b,2400); quad=QUAD_TODO; } }
+  const res=await escanearDoc(origC,quad,filtro); if(!res||W!==yo) return;
+  W.sc=W.sc||{}; W.sc[t]={origC:res.origC,quad:res.quad,filtro:res.filtro};
+  if(t==='comp'){ if(W.compUrl) URL.revokeObjectURL(W.compUrl); W.comp=res.blob; W.compUrl=URL.createObjectURL(res.blob); W.compChanged=true; renderWz(); autoLeerComp(); }
+  else { if(W.fotoUrl) URL.revokeObjectURL(W.fotoUrl); W.foto=res.blob; W.fotoUrl=URL.createObjectURL(res.blob); W.fotoChanged=true; W.aviso=null; renderWz(); if(W.mode==='factura') autoLeer(true); }
+}
 
 /* ---------- lectura de la factura: Claude (con internet) o Tesseract (sin internet) ---------- */
 function conocidos(){ const by={}; for(const m of S.movs){ if(!m.beneficiario||m.persona||m.tipo!=='gasto') continue; const k=m.beneficiario; (by[k]=by[k]||[]).push(m); } return by; }
@@ -1139,6 +1186,7 @@ function compHTML(){ const d=W.d, ch=d.pago==='CHEQUE';
   ${W.compUrl?`<button style="padding:0;border:0;background:none" data-act="zoom" data-src="${W.compUrl}"><img src="${W.compUrl}" alt="Comprobante" style="max-height:180px;width:100%;object-fit:contain;border-radius:12px;background:#000;display:block"></button>`:''}
   <div class="two" style="margin-top:4px"><button class="btn ${W.compUrl?'btn-ghost':'btn-primary'}" data-act="cam" data-t="comp">${svg(UI.cam).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}${W.compUrl?'Otra foto':'Tomar foto'}</button>
   <button class="btn btn-ghost" data-act="${W.compUrl?'quitar-comp':'gal'}" data-t="comp">${W.compUrl?'Quitar':svg(UI.img).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')+'Galería'}</button></div>
+  ${W.compUrl?`<div class="scanbar"><button class="chip" data-act="bordes" data-t="comp">Ajustar esquinas y filtro</button></div>`:''}
   ${ocrCHTML()}</div>
   <div class="field"><label for="w-num">Número de ${ch?'cheque':'transferencia'}</label><input class="inp num ${au('numero')}" id="w-num" data-f="numero" inputmode="numeric" value="${esc(d.numero)}" placeholder="${ch?'Ej.: 000245':'Ej.: 235741760'}">${au('numero')?'<small class="autolbl">Leído de la foto. Revísalo.</small>':''}</div>`; }
 function ocrCHTML(){ const o=W&&W.ocrC; if(!o) return '';
@@ -1361,11 +1409,8 @@ async function compress(blob,max=1600,q=.78){
     const c=document.createElement('canvas'); c.width=Math.round(img.naturalWidth*s); c.height=Math.round(img.naturalHeight*s);
     c.getContext('2d').drawImage(img,0,0,c.width,c.height); const out=await new Promise(r=>c.toBlob(r,'image/jpeg',q)); return {blob:out||blob,w:c.width,h:c.height};
   } finally { URL.revokeObjectURL(url); } }
-async function onFoto(file){ if(!file||!W) return; if(W.photoT==='comp') return onComp(file);
-  if(W.mode!=='factura'){ toast('Procesando foto…'); try{ const r=await compress(file); if(W.fotoUrl) URL.revokeObjectURL(W.fotoUrl); W.foto=r.blob; W.fotoUrl=URL.createObjectURL(r.blob); W.fotoChanged=true; renderWz(); $('.toast').hidden=true; }catch(e){ toast('No se pudo leer esa imagen. Prueba con otra.'); } return; }
-  toast('Buscando la hoja…'); const yo=W;
-  try{ const c=await bitmapDe(file,2400); if(W!==yo) return; W.origC=c; await new Promise(r=>setTimeout(r,20)); const r=detectarHoja(c,true); W.quad=r&&r.q; W.bordes=r?r.modo:'no'; W.scanModo='mejorada'; W.aviso=null;
-    await aplicarScan(); renderWz(); $('.toast').hidden=true; autoLeer(); }catch(e){ console.warn(e); toast('No se pudo leer esa imagen. Prueba con otra.'); } }
+async function onFoto(file){ if(!file||!W) return; const t=W.photoT==='comp'?'comp':'fact';
+  try{ await escanearPara(t,file); }catch(e){ console.warn(e); toast('No se pudo leer esa imagen. Prueba con otra.'); } }
 
 /* ---------- detalle ---------- */
 async function verMov(id){
@@ -1548,12 +1593,7 @@ document.addEventListener('click',async e=>{
     case 'w-persona': W.d.beneficiario=b.dataset.v; renderWz(); break;
     case 'w-motivo': { const mo=MOTIVOS.find(x=>x[0]===b.dataset.v); W.d.detalle=mo[0]; if(mo[1] && CAT[mo[1]] && (!W.d.categoria||MOTIVOS.some(x=>x[1]===W.d.categoria))) W.d.categoria=mo[1]; renderWz(); if(mo[0]==='OTRO') setTimeout(()=>$('#w-detalle')?.focus(),60); break; }
     case 'releer': W.aviso=null; autoLeer(true); break;
-    case 'bordes': if(!W.origC && W.foto){ W.origC=await bitmapDe(W.foto,2400); W.quad=null; } abrirBordes(); break;
-    case 'crop-todo': W.qEdit=QUAD_TODO.map(p=>p.slice()); dibujarBordes(); break;
-    case 'crop-auto': { const r=detectarHoja(W.origC,true); const q=r&&r.q; if(q){ W.qEdit=q; dibujarBordes(); } else toast('No encontré la hoja. Muévelos a mano.'); break; }
-    case 'crop-ok': await cerrarBordes(true); break;
-    case 'crop-x': await cerrarBordes(false); break;
-    case 'scan-modo': W.scanModo=W.scanModo==='original'?'mejorada':'original'; await aplicarScan(); renderWz(); break;
+    case 'bordes': try{ await escanearPara(b.dataset.t||'fact'); }catch(e){ console.warn(e); toast('No se pudo abrir la foto.'); } break;
     case 'cats': catsSheet(); break;
     case 'cat-new': formCat(null); break;
     case 'cat-edit': formCat(CAT[b.dataset.id]); break;
