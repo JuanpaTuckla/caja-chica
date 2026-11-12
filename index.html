@@ -552,7 +552,8 @@ function viewResumen(){
     <button class="mi" data-act="revisar" data-k="foto"><span class="ico" style="--c:var(--warn)">${svg(UI.nophoto)}</span><div class="mid"><div class="t">${sinFoto} ${sinFoto===1?'gasto':'gastos'} sin foto</div><div class="s">Toca para verlos y agregar la foto</div></div>${svg(UI.chev)}</button>
     <button class="mi" data-act="revisar" data-k="fact"><span class="ico" style="--c:var(--warn)">${svg(IC.ADM)}</span><div class="mid"><div class="t">${sinFact} ${sinFact===1?'gasto':'gastos'} sin número de factura</div><div class="s">Tiendas o compras sin comprobante</div></div>${svg(UI.chev)}</button>
   </div>`:''}
-  <button class="btn btn-ghost btn-block" style="margin-top:18px" data-act="export" data-scope="obra">${svg(UI.down).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Exportar ${esc(obra().nombre)} a Excel</button>`;
+  <button class="btn btn-ghost btn-block" style="margin-top:18px" data-act="export" data-scope="obra">${svg(UI.down).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Exportar ${esc(obra().nombre)} a Excel</button>
+  <button class="btn btn-ghost btn-block" style="margin-top:10px" data-act="fotos-zip" data-scope="obra">${svg(UI.down).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Descargar fotos (ZIP)</button>`;
 }
 
 /* ---------- obras ---------- */
@@ -576,6 +577,7 @@ function viewMas(){
   <div class="menu">
     ${mi('export','obra',UI.down,`Excel de ${esc(obra().nombre)}`,'Mismo formato de tu hoja, con la foto de cada factura')}
     ${S.obras.length>1?mi('export','todas',UI.down,'Excel de todas las obras','Una hoja por obra, más el resumen por categoría'):''}
+    ${mi('fotos-zip','obra',UI.cam,`Fotos de ${esc(obra().nombre)} (ZIP)`,'Carpetas FACTURAS y TRANSFERENCIAS, cada foto con su fecha')}
   </div>
   <div class="section-h"><h2>Apariencia</h2></div>
   <div class="menu">${mi('fondo','',UI.img,'Fondo de la tarjeta de saldo',({tela:'Telaraña roja y azul',img:'Tu imagen'})[store.get('bal',{}).tipo]||'Clásico')}</div>
@@ -1557,6 +1559,38 @@ async function exportar(scope){
   entregar(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),nombre);
 }
 
+/* ---------- fotos en ZIP: FACTURAS/ y TRANSFERENCIAS/ ---------- */
+const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(u){ let c=0xFFFFFFFF; for(let i=0;i<u.length;i++) c=CRC_T[(c^u[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+/* zip sin compresión (las fotos ya vienen comprimidas en JPG) */
+function hacerZip(arch){ const enc=new TextEncoder(), partes=[], central=[]; let off=0; const d=new Date();
+  const dt=((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1)), dd=(((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate());
+  for(const a of arch){ const nm=enc.encode(a.nombre), dat=a.data, crc=crc32(dat);
+    const h=new DataView(new ArrayBuffer(30)); h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(10,dt,true); h.setUint16(12,dd,true); h.setUint32(14,crc,true); h.setUint32(18,dat.length,true); h.setUint32(22,dat.length,true); h.setUint16(26,nm.length,true);
+    partes.push(h.buffer,nm,dat);
+    const c=new DataView(new ArrayBuffer(46)); c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(12,dt,true); c.setUint16(14,dd,true); c.setUint32(16,crc,true); c.setUint32(20,dat.length,true); c.setUint32(24,dat.length,true); c.setUint16(28,nm.length,true); c.setUint32(42,off,true);
+    central.push(c.buffer,nm); off+=30+nm.length+dat.length; }
+  const csz=central.reduce((s,x)=>s+x.byteLength,0), e=new DataView(new ArrayBuffer(22)); e.setUint32(0,0x06054b50,true); e.setUint16(8,arch.length,true); e.setUint16(10,arch.length,true); e.setUint32(12,csz,true); e.setUint32(16,off,true);
+  return new Blob([...partes,...central,e.buffer],{type:'application/zip'}); }
+const nomArch=s=>String(s||'').replace(/\n+/g,' ').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim().slice(0,60);
+async function fotosZip(scope){
+  toast('Armando el ZIP de fotos…');
+  const obras= scope==='todas'? S.obras : [obra()], arch=[], usados=new Set(); let nf=0,nc=0;
+  const unico=n=>{ let k=n, i=2; while(usados.has(k.toLowerCase())) k=n.replace(/\.jpg$/,` (${i++}).jpg`); usados.add(k.toLowerCase()); return k; };
+  const fch=iso=>{ const [y,m,d]=(iso||'').split('-'); return d&&m&&y?`${y}-${m}-${d}`:'SIN FECHA'; };
+  for(const o of obras){ const pre=obras.length>1?nomArch(o.nombre.toUpperCase())+'/':'';
+    const ms=movsObra(o.id).filter(m=>m.tipo==='gasto').sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||'')||(a.creado||0)-(b.creado||0));
+    for(const m of ms){ const f=fch(m.fecha);
+      if(m.fotoId){ const r=await DB.get('fotos',m.fotoId); if(r&&r.blob){ const det=nomArch(sinVinetas(m.detalle||'').split('\n')[0])||'GASTO';
+        arch.push({nombre:unico(`${pre}FACTURAS/${f} ${det} $${(+m.valor||0).toFixed(2)}.jpg`),data:new Uint8Array(await r.blob.arrayBuffer())}); nf++; } }
+      if(m.compId){ const r=await DB.get('fotos',m.compId); if(r&&r.blob){ const num=nomArch(m.numero)||'SIN NUMERO';
+        arch.push({nombre:unico(`${pre}TRANSFERENCIAS/${f} ${m.pago==='CHEQUE'?'CHEQUE':'COMP'} ${num}.jpg`),data:new Uint8Array(await r.blob.arrayBuffer())}); nc++; } } } }
+  if(!arch.length){ toast('Todavía no hay fotos para descargar.'); return; }
+  const nombre=`Fotos_${scope==='todas'?'Todas':safeName(obra().nombre)}_${todayISO()}.zip`;
+  const tt=$('.toast'); if(tt) tt.hidden=true; await entregar(hacerZip(arch),nombre);
+  const h=document.querySelector('#layer .hint'); if(h) h.insertAdjacentHTML('beforeend',`<br>${nf} ${nf===1?'factura':'facturas'} · ${nc} ${nc===1?'comprobante':'comprobantes'}`);
+}
+
 /* ---------- respaldo ---------- */
 async function backup(){
   toast('Preparando respaldo…');
@@ -1648,6 +1682,7 @@ document.addEventListener('click',async e=>{
     case 'borrar-obra': { if(!arm(b,'obra','Toca otra vez para eliminar todo')) return; const id=b.dataset.id; for(const m of movsObra(id)){ if(m.fotoId) await DB.del('fotos',m.fotoId); if(m.compId) await DB.del('fotos',m.compId); await DB.del('movs',m.id); } await DB.del('obras',id); await loadAll(); closeLayer(); S.view='inicio'; render(); toast('Obra eliminada'); break; }
     case 'seed': b.disabled=true; await seed(); break;
     case 'export': exportar(b.dataset.scope); break;
+    case 'fotos-zip': fotosZip(b.dataset.scope); break;
     case 'backup': backup(); break;
     case 'restore': $('#f-restore').click(); break;
     case 'share-file': shareFile(); break;
