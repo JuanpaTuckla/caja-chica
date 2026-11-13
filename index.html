@@ -489,9 +489,8 @@ function viewInicio(){
     <div class="bar" title="Gastado ${pct.toFixed(0)}% del fondo"><i style="width:${pct}%"></i></div>
     <div class="bal-row num"><div><small>Fondos recibidos</small><b>${money(t.ing)}</b></div><div><small>Gastado · ${pct.toFixed(0)}%</small><b>${money(t.gas)}</b></div></div>
   </section>
-  <div class="actions three">
+  <div class="actions">
     <button class="btn btn-primary" data-act="nuevo-gasto">${svg(UI.cam,'').replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Registrar gasto</button>
-    <button class="btn btn-mic" data-act="voz" aria-label="Nota de voz" title="Nota de voz">${svg(UI.mic)}</button>
     <button class="btn btn-ghost" data-act="nuevo-ingreso">${svg(UI.down).replace('<svg','<svg style="stroke:var(--good);fill:none;stroke-width:2"')}Agregar fondo</button>
   </div>
   ${top.length?`<div class="section-h"><h2>Por categoría</h2><button class="link" data-act="view" data-v="resumen">Ver resumen</button></div>
@@ -628,7 +627,6 @@ const steps=()=> W&&W.mode==='persona'?STEPS_P:STEPS_F;
 const MOTIVOS=[['ADELANTO DE SUELDO','MOBRA'],['COMIDA','ALIMENTACION'],['PAGO DE JORNAL','MOBRA'],['MOVILIZACIÓN','ADM'],['OTRO','']];
 function elegirTipo(){ openLayer(`${sheetHead('¿Qué vas a registrar?')}<div class="pay-opts">
   <button class="pay" data-act="nuevo-factura"><span class="ico" style="--c:var(--accent)">${svg(UI.scan)}</span><div><div>Compra con factura</div><small>Con foto la app recorta la hoja y llena todo</small></div></button>
-  <button class="pay" data-act="voz"><span class="ico" style="--c:var(--bad)">${svg(UI.mic)}</span><div><div>Nota de voz</div><small>Dilo ahora y complétalo después con la foto</small></div></button>
   <button class="pay" data-act="nuevo-persona"><span class="ico" style="--c:var(--ink)">${svg(UI.person)}</span><div><div>Pago a una persona</div><small>Adelantos, comida, jornales. Sin factura.</small></div></button></div>`); }
 function nuevoGasto(mode='factura'){ W={mode,step:0,isNew:true,d:{tipo:'gasto',fecha:todayISO(),hora:horaAhora(),pago:'EFECTIVO',valor:'',categoria:'',detalle:'',lugar:'',beneficiario:'',factura:'',numero:''},foto:null,fotoUrl:null,fotoChanged:false,comp:null,compUrl:null,compChanged:false,auto:new Set(),ocr:null,ocrC:null}; renderWz(); }
 async function editarGasto(m){ W={mode:m.persona?'persona':'factura',isNew:false,id:m.id,d:{...m,valor:String(m.valor).replace('.',',')},foto:null,fotoUrl:null,fotoChanged:false,comp:null,compUrl:null,compChanged:false,auto:new Set(),ocr:null,ocrC:null}; W.step=steps().length-1;
