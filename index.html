@@ -164,6 +164,7 @@ audio{width:100%;height:40px}
 .search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 12px;margin-bottom:10px}
 .search input{border:0;background:transparent;flex:1;padding:11px 0;min-width:0;outline:none}
 .search svg{width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:2}
+.add-foto{margin-bottom:12px;padding:12px}.add-foto .two{margin:0}.add-foto-mini{display:flex;align-items:center;gap:8px;margin:-4px 0 12px}.add-foto-mini span{font-size:13px;color:var(--muted);flex:none}.add-foto-mini .two{flex:1;margin:0}.add-foto-mini .btn{padding:8px 10px;font-size:13.5px;min-height:0}
 .cal-btn{border:0;background:transparent;padding:8px;margin-right:-6px;border-radius:10px;display:grid;place-items:center;flex:none}.cal-btn svg{width:20px;height:20px;stroke:var(--ink)}.cal-btn.on{background:var(--ink)}.cal-btn.on svg{stroke:var(--bg)}
 .fechas{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:-2px 0 12px}.fechas-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.fechas-row label{display:grid;gap:3px}.fechas-row small{color:var(--muted);font-size:12px;font-weight:600}.fechas-row .inp{padding:9px 10px;min-width:0}
 .fechas .chips{display:flex;flex-wrap:wrap;gap:6px}.fechas-res{margin-top:8px;font-size:13.5px;color:var(--muted)}.fechas-res:empty{display:none}.fechas-res b{color:var(--ink)}
@@ -1019,8 +1020,8 @@ async function escanearPara(t,file){
   else { const s=W.sc&&W.sc[t]; if(s){ origC=s.origC; quad=s.quad; filtro=s.filtro; } else { const b=t==='comp'?W.comp:W.foto; if(!b) return; origC=await bitmapDe(b,2400); quad=QUAD_TODO; } }
   const res=await escanearDoc(origC,quad,filtro); if(!res||W!==yo) return;
   W.sc=W.sc||{}; W.sc[t]={origC:res.origC,quad:res.quad,filtro:res.filtro};
-  if(t==='comp'){ if(W.compUrl) URL.revokeObjectURL(W.compUrl); W.comp=res.blob; W.compUrl=URL.createObjectURL(res.blob); W.compChanged=true; renderWz(); autoLeerComp(); }
-  else { if(W.fotoUrl) URL.revokeObjectURL(W.fotoUrl); W.foto=res.blob; W.fotoUrl=URL.createObjectURL(res.blob); W.fotoChanged=true; W.aviso=null; renderWz(); if(W.mode==='factura') autoLeer(true); }
+  if(t==='comp'){ if(W.compUrl) URL.revokeObjectURL(W.compUrl); W.comp=res.blob; W.compUrl=URL.createObjectURL(res.blob); W.compChanged=true; renderWz(); if(W.isNew) autoLeerComp(); }
+  else { if(W.fotoUrl) URL.revokeObjectURL(W.fotoUrl); W.foto=res.blob; W.fotoUrl=URL.createObjectURL(res.blob); W.fotoChanged=true; W.aviso=null; renderWz(); if(W.mode==='factura' && W.isNew) autoLeer(true); }
 }
 
 /* ---------- lectura de la factura: Claude (con internet) o Tesseract (sin internet) ---------- */
@@ -1429,10 +1430,22 @@ async function compress(blob,max=1600,q=.78){
     const c=document.createElement('canvas'); c.width=Math.round(img.naturalWidth*s); c.height=Math.round(img.naturalHeight*s);
     c.getContext('2d').drawImage(img,0,0,c.width,c.height); const out=await new Promise(r=>c.toBlob(r,'image/jpeg',q)); return {blob:out||blob,w:c.width,h:c.height};
   } finally { URL.revokeObjectURL(url); } }
-async function onFoto(file){ if(!file||!W) return; const t=W.photoT==='comp'?'comp':'fact';
+async function onFoto(file){ if(FOTO_DIR) return fotoDirecta(file); if(!file||!W) return; const t=W.photoT==='comp'?'comp':'fact';
   try{ await escanearPara(t,file); }catch(e){ console.warn(e); toast('No se pudo leer esa imagen. Prueba con otra.'); } }
 
 /* ---------- detalle ---------- */
+function botonesFoto(id,t,mini=false){ const ic=i=>svg(i).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"');
+  return `<div class="two"><button class="btn ${mini?'btn-ghost':'btn-primary'}" data-act="foto-dir" data-id="${id}" data-t="${t}" data-src="cam">${ic(UI.cam)}Tomar foto</button><button class="btn btn-ghost" data-act="foto-dir" data-id="${id}" data-t="${t}" data-src="gal">${ic(UI.img)}Galería</button></div>`; }
+let FOTO_DIR=null;
+/* pone la foto a un gasto ya guardado: solo recorta y mejora, NO lee ni cambia los datos */
+async function fotoDirecta(file){ const fd=FOTO_DIR; FOTO_DIR=null; if(!file||!fd) return;
+  try{ toast('Abriendo la foto…'); const origC=await bitmapDe(file,2400); const tt=$('.toast'); if(tt) tt.hidden=true; await new Promise(r=>setTimeout(r,20));
+    const r=detectarHoja(origC,true); const res=await escanearDoc(origC,r&&r.q,'mejorada'); if(!res) return;
+    const m=S.movs.find(x=>x.id===fd.id); if(!m) return; const campo=fd.t==='comp'?'compId':'fotoId';
+    const nuevo=uid(); await DB.put('fotos',{id:nuevo,blob:res.blob}); const viejo=m[campo];
+    const m2={...m,[campo]:nuevo}; await DB.put('movs',m2); if(viejo) await DB.del('fotos',viejo);
+    await loadAll(); render(); await verMov(m.id); toast(fd.t==='comp'?'Comprobante guardado':'Foto guardada. Los datos no cambiaron.'); askPersist();
+  }catch(e){ console.warn(e); toast('No se pudo guardar esa imagen. Prueba con otra.'); } }
 async function verMov(id){
   const m=S.movs.find(x=>x.id===id); if(!m) return; const ing=m.tipo==='ingreso'; let url=null, curl=null;
   if(m.fotoId){ const f=await DB.get('fotos',m.fotoId); if(f) url=URL.createObjectURL(f.blob); }
@@ -1442,9 +1455,11 @@ async function verMov(id){
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">${ing?`<span class="ico" style="--c:var(--good)">${svg(IC.INGRESO)}</span>`:catIcon(m.categoria)}
       <div style="min-width:0"><div style="font-family:var(--f-display);font-size:28px;font-weight:700" class="num">${ing?'+':'−'}${money(m.valor)}</div><div style="color:var(--muted)">${listaDetalle(m.detalle)}</div></div></div>
     ${ing?'':(url?`<button style="padding:0;border:0;background:none;width:100%;margin-bottom:12px;border-radius:var(--r);overflow:hidden" data-act="zoom" data-src="${url}"><img class="thumb" src="${url}" alt="Factura"></button>`
-      :`<button class="offline" style="width:100%;border-color:var(--warn);color:var(--warn);background:var(--warn-soft);cursor:pointer" data-act="editar" data-id="${m.id}" data-s="0">${svg(UI.nophoto).replace('<svg','<svg style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;flex:none"')}Sin foto de factura. Toca para agregarla.</button>`)}
+      :`<div class="card add-foto"><div class="note" style="margin:0 0 8px;color:var(--warn)">${svg(UI.nophoto).replace('<svg','<svg style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;vertical-align:-3px;margin-right:4px"')}Sin foto ${m.persona?'del recibo':'de la factura'}. Agrégala sin cambiar los datos:</div>${botonesFoto(m.id,'fact')}</div>`)}
+    ${!ing&&url?`<div class="add-foto-mini"><span>Cambiar foto:</span>${botonesFoto(m.id,'fact',true)}</div>`:''}
     ${aurl?`<div class="card" style="margin-bottom:12px"><div class="note" style="margin:0 0 6px">Nota de voz${m.voz?`: <i>“${esc(m.voz)}”</i>`:''}</div><audio controls src="${aurl}"></audio></div>`:''}
     ${m.pendiente?`<button class="btn btn-primary btn-block" style="margin-bottom:12px" data-act="editar" data-id="${m.id}">${svg(UI.cam).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Completar con la foto y los datos</button>`:''}
+    ${!ing&&!curl&&m.pago&&m.pago!=='EFECTIVO'?`<div class="card add-foto"><div class="note" style="margin:0 0 8px">Foto ${m.pago==='CHEQUE'?'del cheque':'del comprobante de transferencia'} (opcional):</div>${botonesFoto(m.id,'comp')}</div>`:''}
     ${curl?`<div class="note" style="margin:0 2px 6px">Foto ${m.pago==='CHEQUE'?'del cheque':'del comprobante'}</div><button style="padding:0;border:0;background:none;width:100%;margin-bottom:12px;border-radius:var(--r);overflow:hidden" data-act="zoom" data-src="${curl}"><img class="thumb" src="${curl}" alt="Comprobante"></button>`:''}
     <div class="review">
       ${ing?'':`<div class="rv"><span>Categoría</span><b>${esc(CAT[m.categoria]?.n||m.categoria)}</b></div>
@@ -1663,8 +1678,9 @@ document.addEventListener('click',async e=>{
     case 'nuevo-ingreso': formIngreso(); break;
     case 'close': closeLayer(); break;
     case 'wz-close': if(W && (W.fotoUrl||W.d.valor||W.d.detalle) && W.isNew){ if(!arm(b,'wz','?')) { b.innerHTML='<b style="font-size:11px;color:var(--bad)">¿Salir?</b>'; return; } } closeLayer(); break;
-    case 'cam': if(W) W.photoT=b.dataset.t||'fact'; $('#f-cam').click(); break;
-    case 'gal': if(W) W.photoT=b.dataset.t||'fact'; $('#f-gal').click(); break;
+    case 'foto-dir': FOTO_DIR={id:b.dataset.id,t:b.dataset.t}; $(b.dataset.src==='gal'?'#f-gal':'#f-cam').click(); break;
+    case 'cam': FOTO_DIR=null; if(W) W.photoT=b.dataset.t||'fact'; $('#f-cam').click(); break;
+    case 'gal': FOTO_DIR=null; if(W) W.photoT=b.dataset.t||'fact'; $('#f-gal').click(); break;
     case 'quitar-comp': if(W.compUrl) URL.revokeObjectURL(W.compUrl); W.comp=null; W.compUrl=null; W.compChanged=true; W.ocrC=null; renderWz(); break;
     case 'ask': if(S.modo==='claude') preguntarClaude(b.dataset.q); else preguntar(b.dataset.q); break;
     case 'chat-clear': if(S.modo==='claude'){ S.chatC=[]; S.claudeMsgs=[]; } else S.chat=[]; render(); break;
