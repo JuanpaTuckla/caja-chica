@@ -84,6 +84,9 @@ button{cursor:pointer}
 .bar{height:6px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent);border-radius:6px}
 .bal-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.cuentas{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:calc(100% - 40px);margin-top:14px;padding:10px 12px;border:0;border-radius:14px;background:rgba(255,255,255,.1);color:inherit;text-align:left;cursor:pointer;position:relative;z-index:1}
+.cuentas div{min-width:0}.cuentas small{display:block;color:var(--card-muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cuentas b{display:block;font-family:var(--f-display);font-weight:600;font-size:17px}.cuentas b.neg{color:#FF8E8E}
+.mv-opts{display:grid;gap:10px}.cta-box{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}.cta-box div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}.cta-box small{color:var(--muted);font-size:12.5px}.cta-box b{display:block;font-family:var(--f-display);font-size:20px}
 .bal-row div{min-width:0}
 .bal-row b{display:block;font-family:var(--f-display);font-weight:600;font-size:17px}
 .bal-row small{color:var(--card-muted);font-size:12px}
@@ -434,7 +437,14 @@ const DB = {
 const S = { chat:[], chatC:[], claudeMsgs:[], modo:'jarvis', pensando:false, obras:[], movs:[], obraId:null, view:'inicio', q:'', d1:'', d2:'', fechasOpen:false, cat:null, periodo:'todo', installEvt:null, persisted:false };
 const obra = () => S.obras.find(o=>o.id===S.obraId);
 const movsObra = (id=S.obraId) => S.movs.filter(m=>m.obraId===id);
-function totales(list){ let ing=0,gas=0; for(const m of list){ if(m.tipo==='ingreso') ing+=m.valor; else gas+=m.valor; } return {ing:r2(ing),gas:r2(gas),saldo:r2(ing-gas)}; }
+function totales(list){ let ing=0,gas=0; for(const m of list){ if(m.tipo==='ingreso') ing+=m.valor; else if(m.tipo!=='traspaso') gas+=m.valor; } return {ing:r2(ing),gas:r2(gas),saldo:r2(ing-gas)}; }
+const BANCO=()=>store.get('banco')||'Banco Pichincha';
+const cuentaDe=m=>m.pago==='EFECTIVO'?'ef':'bco';
+/* saldo en efectivo y en el banco: fondos y gastos según cómo se pagaron, más retiros y depósitos */
+function saldosCuentas(list){ let ef=0,bco=0; for(const m of list){ const v=+m.valor||0;
+    if(m.tipo==='traspaso'){ if(m.dir==='retiro'){ bco-=v; ef+=v; } else { ef-=v; bco+=v; } continue; }
+    const sg=m.tipo==='ingreso'?1:-1; if(cuentaDe(m)==='ef') ef+=sg*v; else bco+=sg*v; }
+  return {ef:r2(ef),bco:r2(bco)}; }
 const sortMovs = a => a.slice().sort((x,y)=> y.fecha.localeCompare(x.fecha) || (y.hora||'').localeCompare(x.hora||'') || (y.creado||0)-(x.creado||0));
 
 async function loadCats(){ let cs=await DB.all('cats'); if(!cs.length){ cs=DEFAULT_CATS.map((c,i)=>({...c,orden:i})); await DB.putMany('cats',cs); } CATS=cs.sort((a,b)=>(a.orden??99)-(b.orden??99)); CAT=Object.fromEntries(CATS.map(c=>[c.id,c])); }
@@ -489,6 +499,7 @@ function viewInicio(){
     <div class="big num ${t.saldo<0?'neg':''}">${money(t.saldo)}</div>
     <div class="bar" title="Gastado ${pct.toFixed(0)}% del fondo"><i style="width:${pct}%"></i></div>
     <div class="bal-row num"><div><small>Fondos recibidos</small><b>${money(t.ing)}</b></div><div><small>Gastado · ${pct.toFixed(0)}%</small><b>${money(t.gas)}</b></div></div>
+    ${(()=>{ const c=saldosCuentas(ms); return `<button class="cuentas" data-act="cuentas"><div><small>💵 Efectivo</small><b class="num ${c.ef<0?'neg':''}">${money(c.ef)}</b></div><div><small>🏦 ${esc(BANCO())}</small><b class="num ${c.bco<0?'neg':''}">${money(c.bco)}</b></div></button>`; })()}
   </section>
   <div class="actions">
     <button class="btn btn-primary" data-act="nuevo-gasto">${svg(UI.cam,'').replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Registrar gasto</button>
@@ -520,6 +531,9 @@ function listaHTML(grupos){
   <div class="list">${g.items.map(rowHTML).join('')}</div></div>`).join('');
 }
 function rowHTML(m){
+  if(m.tipo==='traspaso') return `<button class="row" data-act="ver" data-id="${m.id}"><span class="ico" style="--c:var(--muted)">${svg(PAGOS[1].i)}</span>
+    <div class="mid"><div class="t">${esc(m.detalle||'')}</div><div class="s">${m.dir==='retiro'?esc(BANCO())+' → Efectivo':'Efectivo → '+esc(BANCO())}</div></div>
+    <div class="amt"><b class="num" style="color:var(--muted)">${money(m.valor)}</b></div></button>`;
   const ing=m.tipo==='ingreso';
   let sub=ing? (m.pago? cap(m.pago):'Fondo') : m.persona? `${m.beneficiario} · pago sin factura` : [m.beneficiario,m.lugar].filter(Boolean).join(' · ') || (CAT[m.categoria]?.n||'');
   const qd=S.q.replace(/\D/g,''); if(m.numero && qd.length>=3 && String(m.numero).replace(/\D/g,'').includes(qd)) sub=`${m.pago==='CHEQUE'?'Cheque':'Transf.'} n.º ${m.numero} · `+sub;
@@ -674,7 +688,7 @@ function renderWz(){
     <div class="field"><label for="w-fact">Número de factura</label><input class="inp num ${au('factura')}" id="w-fact" data-f="factura" inputmode="numeric" placeholder="001-001-000000123" value="${esc(d.factura)}"><small>Escribe solo los números, los guiones se ponen solos. Déjalo vacío si no te dieron factura.</small></div>
     <div class="field"><label for="w-fecha">Fecha y hora del gasto</label><div style="display:flex;gap:8px"><input class="inp ${au('fecha')}" style="flex:1.6" type="date" id="w-fecha" data-f="fecha" value="${esc(d.fecha)}" max="${todayISO()}"><input class="inp ${au('hora')}" style="flex:1" type="time" id="w-hora" data-f="hora" value="${esc(d.hora||'')}" aria-label="Hora"></div>
     <div class="chips" style="margin-top:4px"><button class="chip ${d.fecha===todayISO()?'on':''}" data-act="w-fecha" data-v="0">Hoy</button><button class="chip ${d.fecha===todayISO(-1)?'on':''}" data-act="w-fecha" data-v="-1">Ayer</button><button class="chip ${d.fecha===todayISO(-2)?'on':''}" data-act="w-fecha" data-v="-2">Anteayer</button></div></div>`;
-  if(st==='pago') body=`<div class="q">¿Cómo pagaste?</div><p class="hint">&nbsp;</p>
+  if(st==='pago') body=`<div class="q">¿Cómo pagaste?</div><p class="hint">${d.pago==='EFECTIVO'?'Sale de tu <b>efectivo</b>.':'Sale de <b>'+esc(BANCO())+'</b>.'}</p>
     <div class="pay-opts">${PAGOS.map(p=>`<button class="pay ${d.pago===p.id?'on':''}" data-act="w-pago" data-p="${p.id}">${svg(p.i)}${p.n}</button>`).join('')}</div>
     ${d.pago!=='EFECTIVO'?compHTML():''}`;
   if(st==='revisar' && W.mode==='persona'){ const c=CAT[d.categoria]; const ed=i=>`<button class="edit" data-act="w-go" data-s="${i}">Cambiar</button>`;
@@ -1447,7 +1461,7 @@ async function fotoDirecta(file){ const fd=FOTO_DIR; FOTO_DIR=null; if(!file||!f
     await loadAll(); render(); await verMov(m.id); toast(fd.t==='comp'?'Comprobante guardado':'Foto guardada. Los datos no cambiaron.'); askPersist();
   }catch(e){ console.warn(e); toast('No se pudo guardar esa imagen. Prueba con otra.'); } }
 async function verMov(id){
-  const m=S.movs.find(x=>x.id===id); if(!m) return; const ing=m.tipo==='ingreso'; let url=null, curl=null;
+  const m=S.movs.find(x=>x.id===id); if(!m) return; if(m.tipo==='traspaso') return formTraspaso(m.dir,m); const ing=m.tipo==='ingreso'; let url=null, curl=null;
   if(m.fotoId){ const f=await DB.get('fotos',m.fotoId); if(f) url=URL.createObjectURL(f.blob); }
   if(m.compId){ const f=await DB.get('fotos',m.compId); if(f) curl=URL.createObjectURL(f.blob); }
   let aurl=null; if(m.audioId){ const f=await DB.get('fotos',m.audioId); if(f) aurl=URL.createObjectURL(f.blob); }
@@ -1481,7 +1495,7 @@ function formIngreso(m){
     <div class="money" style="margin-bottom:16px"><span>$</span><input id="i-valor" name="valor" inputmode="decimal" placeholder="0,00" value="${m?String(m.valor).replace('.',','):''}" aria-label="Valor"></div>
     <div class="field"><label for="i-det">Concepto</label><input class="inp" id="i-det" name="detalle" value="${esc(d.detalle)}" list="dl-ing"><datalist id="dl-ing"><option value="FONDO CAJA CHICA"></option><option value="REPOSICIÓN CAJA CHICA"></option><option value="ANTICIPO"></option></datalist></div>
     <div class="field"><label for="i-fecha">Fecha</label><input class="inp" type="date" id="i-fecha" name="fecha" value="${d.fecha}"></div>
-    <div class="field"><label for="i-pago">Forma</label><select class="inp" id="i-pago" name="pago">${PAGOS.map(p=>`<option value="${p.id}" ${d.pago===p.id?'selected':''}>${p.n}</option>`).join('')}</select></div>
+    <div class="field"><label for="i-pago">¿Cómo te llegó?</label><select class="inp" id="i-pago" name="pago">${PAGOS.map(p=>`<option value="${p.id}" ${d.pago===p.id?'selected':''}>${p.id==='EFECTIVO'?'Efectivo (en mano)':p.n+' (a '+esc(BANCO())+')'}</option>`).join('')}</select></div>
     <div class="field"><label for="i-num">Número de transferencia o cheque</label><input class="inp num" id="i-num" name="numero" inputmode="numeric" value="${esc(d.numero)}"></div>
     <p id="i-err" class="note" style="color:var(--bad)" role="alert"></p>
     <button class="btn btn-primary btn-block" type="submit">Guardar fondo</button></form>`);
@@ -1492,6 +1506,44 @@ async function saveIngreso(form){
   await DB.put('movs',{id:id||uid(),obraId:prev?.obraId||S.obraId,tipo:'ingreso',fecha:fd.get('fecha')||todayISO(),detalle:String(fd.get('detalle')||'FONDO').trim().toUpperCase(),pago:fd.get('pago'),numero:String(fd.get('numero')||'').trim(),valor:v,categoria:'',fotoId:null,creado:prev?.creado||Date.now()});
   await loadAll(); closeLayer(); render(); toast('Fondo guardado');
 }
+
+/* ---------- efectivo y banco ---------- */
+function verCuentas(){ const c=saldosCuentas(movsObra()), B=esc(BANCO());
+  openLayer(`${sheetHead('Efectivo y banco')}
+    <div class="cta-box num"><div><small>💵 Efectivo (en mano)</small><b class="${c.ef<0?'neg':''}">${money(c.ef)}</b></div><div><small>🏦 ${B}</small><b class="${c.bco<0?'neg':''}">${money(c.bco)}</b></div></div>
+    <p class="hint" style="margin-top:-4px">Los fondos y gastos en <b>efectivo</b> van a Efectivo. Los de <b>transferencia o cheque</b> van a ${B}. La suma de los dos es tu saldo.</p>
+    ${c.ef<0||c.bco<0?`<p class="note" style="color:var(--warn);margin-top:-4px">${c.ef<0?'El efectivo':'El banco'} sale negativo porque antes no se anotaban los retiros del banco. Toca <b>Cuadrar con lo que tengo</b> una vez y queda bien.</p>`:''}
+    <div class="mv-opts">
+      <button class="pay" data-act="tras" data-d="retiro"><span class="ico" style="--c:var(--good)">${svg(UI.down)}</span><div><div>Saqué plata del banco</div><small>Retiro de ${B} a efectivo</small></div></button>
+      <button class="pay" data-act="tras" data-d="deposito"><span class="ico" style="--c:var(--ink)">${svg(PAGOS[1].i)}</span><div><div>Deposité efectivo en el banco</div><small>De efectivo a ${B}</small></div></button>
+      <button class="pay" data-act="cuadrar"><span class="ico" style="--c:var(--warn)">${svg(PAGOS[0].i)}</span><div><div>Cuadrar con lo que tengo</div><small>Cuenta tu efectivo y la app ajusta el banco</small></div></button>
+      <button class="pay" data-act="banco-nombre"><span class="ico" style="--c:var(--muted)">${svg('<path d="M3 10h18M5 10v8M19 10v8M9 10v8M15 10v8M3 20h18M12 3l9 5H3z"/>')}</span><div><div>Nombre del banco</div><small>${B}</small></div></button>
+    </div>`); }
+function formTraspaso(dir,m){ const B=esc(BANCO()); const d=m||{fecha:todayISO(),valor:'',numero:''};
+  openLayer(`${sheetHead(dir==='retiro'?'Retiro del banco':'Depósito al banco')}
+    <p class="hint" style="margin-top:-4px">${dir==='retiro'?`Pasa plata de ${B} a tu efectivo.`:`Pasa plata de tu efectivo a ${B}.`} No cambia el saldo total.</p>
+    <form id="f-tras" data-id="${m?.id||''}" data-dir="${dir}">
+    <div class="money" style="margin-bottom:16px"><span>$</span><input id="t-valor" name="valor" inputmode="decimal" placeholder="0,00" value="${m?String(m.valor).replace('.',','):''}" aria-label="Valor"></div>
+    <div class="field"><label for="t-fecha">Fecha</label><input class="inp" type="date" id="t-fecha" name="fecha" value="${d.fecha}" max="${todayISO()}"></div>
+    <div class="field"><label for="t-num">Número de comprobante (opcional)</label><input class="inp num" id="t-num" name="numero" inputmode="numeric" value="${esc(d.numero||'')}"></div>
+    <p id="t-err" class="note" style="color:var(--bad)" role="alert"></p>
+    <button class="btn btn-primary btn-block" type="submit">Guardar</button>
+    ${m?`<button class="btn btn-danger btn-block" type="button" style="margin-top:10px" data-act="borrar" data-id="${m.id}">Eliminar</button>`:''}</form>`); }
+async function saveTraspaso(form){ const fd=new FormData(form), v=parseMonto(fd.get('valor')); if(!(v>0)){ $('#t-err').textContent='Escribe el valor.'; return; }
+  const id=form.dataset.id, prev=S.movs.find(m=>m.id===id), dir=form.dataset.dir;
+  await DB.put('movs',{id:id||uid(),obraId:prev?.obraId||S.obraId,tipo:'traspaso',dir,fecha:fd.get('fecha')||todayISO(),hora:prev?.hora||horaAhora(),detalle:dir==='retiro'?'RETIRO DEL BANCO':'DEPÓSITO AL BANCO',pago:dir==='retiro'?'EFECTIVO':'TRANSFERENCIA',numero:String(fd.get('numero')||'').trim(),valor:v,categoria:'',fotoId:null,creado:prev?.creado||Date.now()});
+  await loadAll(); closeLayer(); render(); toast(dir==='retiro'?'Retiro guardado':'Depósito guardado'); }
+function formCuadrar(){ const c=saldosCuentas(movsObra());
+  openLayer(`${sheetHead('Cuadrar efectivo')}
+    <p class="hint" style="margin-top:-4px">Cuenta los billetes y monedas que tienes de esta obra y escribe el total. La app pasa la diferencia entre efectivo y ${esc(BANCO())}; el saldo total no cambia.</p>
+    <form id="f-cuadrar"><div class="money" style="margin-bottom:10px"><span>$</span><input id="c-valor" name="valor" inputmode="decimal" placeholder="0,00" aria-label="Efectivo que tienes"></div>
+    <p class="note">La app calcula ahora: <b class="num">${money(c.ef)}</b> en efectivo.</p>
+    <p id="c-err" class="note" style="color:var(--bad)" role="alert"></p>
+    <button class="btn btn-primary btn-block" type="submit">Cuadrar</button></form>`); }
+async function saveCuadrar(form){ const raw=String(new FormData(form).get('valor')||'').trim(); const v=parseMonto(raw); if(raw===''||isNaN(v)||v<0){ $('#c-err').textContent='Escribe cuánto efectivo tienes (puede ser 0).'; return; }
+  const c=saldosCuentas(movsObra()), dif=r2(v-c.ef); if(Math.abs(dif)<.005){ closeLayer(); toast('Ya está cuadrado'); return; }
+  await DB.put('movs',{id:uid(),obraId:S.obraId,tipo:'traspaso',dir:dif>0?'retiro':'deposito',fecha:todayISO(),hora:horaAhora(),detalle:'AJUSTE EFECTIVO / BANCO',pago:dif>0?'EFECTIVO':'TRANSFERENCIA',numero:'',valor:Math.abs(dif),categoria:'',fotoId:null,creado:Date.now()});
+  await loadAll(); closeLayer(); render(); toast('Listo: efectivo '+money(v)); }
 
 /* ---------- obras: crear/editar ---------- */
 function formObra(o){
@@ -1550,7 +1602,7 @@ async function exportar(scope){
     const ws=wb.addWorksheet(nm,{views:[{state:'frozen',ySplit:1}]});
     ws.columns=[{header:'FECHA',width:12},{header:'HORA',width:8},{header:'DETALLE',width:34},{header:'BENEFICIARIO',width:34},{header:'LUGAR O LOGO',width:20},{header:'FACTURA',width:20},{header:'# CHEQ O TRASFE',width:17},{header:'NUMERO',width:14},{header:'CREDITO',width:12},{header:'DEBITO',width:12},{header:'CATEGORIA',width:15},{header:'FOTO FACTURA',width:20},{header:'FOTO COMPROBANTE',width:20}];
     ws.getRow(1).height=30; ws.getRow(1).eachCell(c=>{Object.assign(c,{font:head.font,fill:head.fill,alignment:head.alignment,border});});
-    const ms=movsObra(o.id).slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||'')||(a.creado||0)-(b.creado||0));
+    const ms=movsObra(o.id).filter(m=>m.tipo!=='traspaso').sort((a,b)=>a.fecha.localeCompare(b.fecha)||(a.hora||'').localeCompare(b.hora||'')||(a.creado||0)-(b.creado||0));
     let r=2;
     for(const m of ms){
       const ing=m.tipo==='ingreso';
@@ -1676,6 +1728,10 @@ document.addEventListener('click',async e=>{
     case 'persona-list': { const n=b.dataset.n; const ms=sortMovs(movsObra().filter(enPeriodo).filter(m=>m.persona&&(m.beneficiario||'SIN NOMBRE')===n)); const tot=ms.reduce((a,m)=>a+m.valor,0);
       openLayer(`${sheetHead(esc(n))}<p class="hint" style="margin-top:-4px">${ms.length} ${ms.length===1?'pago':'pagos'} · total <b class="num" style="color:var(--ink)">${money(tot)}</b></p><div class="list">${ms.map(rowHTML).join('')}</div>`); break; }
     case 'nuevo-ingreso': formIngreso(); break;
+    case 'cuentas': verCuentas(); break;
+    case 'tras': formTraspaso(b.dataset.d); break;
+    case 'cuadrar': formCuadrar(); break;
+    case 'banco-nombre': { const n=prompt('Nombre de tu banco',BANCO()); if(n&&n.trim()){ store.set('banco',n.trim()); closeLayer(); render(); verCuentas(); } break; }
     case 'close': closeLayer(); break;
     case 'wz-close': if(W && (W.fotoUrl||W.d.valor||W.d.detalle) && W.isNew){ if(!arm(b,'wz','?')) { b.innerHTML='<b style="font-size:11px;color:var(--bad)">¿Salir?</b>'; return; } } closeLayer(); break;
     case 'foto-dir': FOTO_DIR={id:b.dataset.id,t:b.dataset.t}; $(b.dataset.src==='gal'?'#f-gal':'#f-cam').click(); break;
@@ -1699,7 +1755,7 @@ document.addEventListener('click',async e=>{
     case 'ver': verMov(b.dataset.id); break;
     case 'zoom': { const v=document.createElement('div'); v.className='viewer'; v.innerHTML=`<img src="${b.dataset.src}" alt="Factura"><button class="x" aria-label="Cerrar">${svg(UI.x)}</button>`;
       v.addEventListener('click',ev=>{ if(ev.target.closest('.x')) v.remove(); else v.classList.toggle('zoom'); }); document.body.appendChild(v); break; }
-    case 'editar': { const m=S.movs.find(x=>x.id===b.dataset.id); closeLayer(); if(m.tipo==='ingreso') formIngreso(m); else { await editarGasto(m); if(b.dataset.s){ W.step=+b.dataset.s; W.volver=true; renderWz(); } } break; }
+    case 'editar': { const m=S.movs.find(x=>x.id===b.dataset.id); closeLayer(); if(m.tipo==='ingreso') formIngreso(m); else if(m.tipo==='traspaso') formTraspaso(m.dir,m); else { await editarGasto(m); if(b.dataset.s){ W.step=+b.dataset.s; W.volver=true; renderWz(); } } break; }
     case 'borrar': { if(!arm(b,'del'+b.dataset.id,'Toca otra vez para eliminar')) return; const m=S.movs.find(x=>x.id===b.dataset.id); if(m.fotoId) await DB.del('fotos',m.fotoId); if(m.compId) await DB.del('fotos',m.compId); if(m.audioId && !S.movs.some(x=>x.id!==m.id&&x.audioId===m.audioId)) await DB.del('fotos',m.audioId); await DB.del('movs',m.id); await loadAll(); closeLayer(); render(); toast('Movimiento eliminado'); break; }
     case 'fechas': S.fechasOpen=!(S.fechasOpen||S.d1||S.d2); if(!S.fechasOpen){ S.d1=''; S.d2=''; } render(); if(S.fechasOpen) setTimeout(()=>$('#fechas')?.scrollIntoView({block:'nearest',behavior:'smooth'}),30); break;
     case 'rango': S.d1=b.dataset.a; S.d2=b.dataset.b; if(!S.d1) S.fechasOpen=true; render(); break;
@@ -1738,7 +1794,7 @@ document.addEventListener('change',e=>{ const t=e.target; if(VR && t.dataset.vd!
 document.addEventListener('change',e=>{ if(W && e.target.id==='w-fecha'){ W.d.fecha=e.target.value; W.auto.delete('fecha'); } });
 document.addEventListener('input',e=>{ if(e.target.dataset.cf){ CF[e.target.dataset.cf]=e.target.value; if(e.target.dataset.cf==='emoji'){ CF.img=null; } refreshCF(); } });
 document.addEventListener('submit',e=>{ e.preventDefault(); if(e.target.id==='f-ask'){ const i=$('#ask-q'); const v=i.value.trim(); if(!v) return; if(S.modo==='claude'){ if(!S.pensando) preguntarClaude(v); } else preguntar(v); return; }
-  if(e.target.id==='f-key'){ const k=String(new FormData(e.target).get('k')||'').trim(); store.set('claudeKey',k); closeLayer(); render(); toast(k?'Clave guardada':'Clave borrada'); return; } if(e.target.id==='f-ing') saveIngreso(e.target); if(e.target.id==='f-obra') saveObra(e.target); });
+  if(e.target.id==='f-key'){ const k=String(new FormData(e.target).get('k')||'').trim(); store.set('claudeKey',k); closeLayer(); render(); toast(k?'Clave guardada':'Clave borrada'); return; } if(e.target.id==='f-ing') saveIngreso(e.target); if(e.target.id==='f-tras') saveTraspaso(e.target); if(e.target.id==='f-cuadrar') saveCuadrar(e.target); if(e.target.id==='f-obra') saveObra(e.target); });
 document.addEventListener('keydown',e=>{ if(e.key==='Enter' && e.target.id==='w-detalle' && e.target.tagName==='TEXTAREA'){ e.preventDefault(); const t=e.target, a=t.selectionStart; t.setRangeText('\n• ',a,t.selectionEnd,'end'); t.dispatchEvent(new Event('input',{bubbles:true})); } });
 document.addEventListener('focusin',e=>{ const t=e.target; if(t.id==='w-detalle'&&t.tagName==='TEXTAREA'&&!t.value){ t.value='• '; } });
 document.addEventListener('keydown',e=>{ if(e.key==='Enter' && W && e.target.matches('.wz-body input') && steps()[W.step]!=='revisar'){ e.preventDefault(); $('[data-act="w-next"]')?.click(); } });
