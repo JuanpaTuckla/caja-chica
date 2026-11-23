@@ -168,6 +168,7 @@ audio{width:100%;height:40px}
 .search input{border:0;background:transparent;flex:1;padding:11px 0;min-width:0;outline:none}
 .search svg{width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:2}
 .add-foto{margin-bottom:12px;padding:12px}.add-foto .two{margin:0}.add-foto-mini{display:flex;align-items:center;gap:8px;margin:-4px 0 12px}.add-foto-mini span{font-size:13px;color:var(--muted);flex:none}.add-foto-mini .two{flex:1;margin:0}.add-foto-mini .btn{padding:8px 10px;font-size:13.5px;min-height:0}
+.fp-chips{display:flex;gap:6px;overflow-x:auto;margin:0 0 10px;padding-bottom:2px;scrollbar-width:none}.fp-chips::-webkit-scrollbar{display:none}.fp-chips .chip{flex:none;padding:6px 12px;font-size:13px}
 .cal-btn{border:0;background:transparent;padding:8px;margin-right:-6px;border-radius:10px;display:grid;place-items:center;flex:none}.cal-btn svg{width:20px;height:20px;stroke:var(--ink)}.cal-btn.on{background:var(--ink)}.cal-btn.on svg{stroke:var(--bg)}
 .fechas{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:-2px 0 12px}.fechas-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.fechas-row label{display:grid;gap:3px}.fechas-row small{color:var(--muted);font-size:12px;font-weight:600}.fechas-row .inp{padding:9px 10px;min-width:0}
 .fechas .chips{display:flex;flex-wrap:wrap;gap:6px}.fechas-res{margin-top:8px;font-size:13.5px;color:var(--muted)}.fechas-res:empty{display:none}.fechas-res b{color:var(--ink)}
@@ -434,17 +435,25 @@ const DB = {
 };
 
 /* ---------- estado ---------- */
-const S = { chat:[], chatC:[], claudeMsgs:[], modo:'jarvis', pensando:false, obras:[], movs:[], obraId:null, view:'inicio', q:'', d1:'', d2:'', fechasOpen:false, cat:null, periodo:'todo', installEvt:null, persisted:false };
+const S = { chat:[], chatC:[], claudeMsgs:[], modo:'jarvis', pensando:false, obras:[], movs:[], obraId:null, view:'inicio', q:'', fp:'', d1:'', d2:'', fechasOpen:false, cat:null, periodo:'todo', installEvt:null, persisted:false };
 const obra = () => S.obras.find(o=>o.id===S.obraId);
 const movsObra = (id=S.obraId) => S.movs.filter(m=>m.obraId===id);
 function totales(list){ let ing=0,gas=0; for(const m of list){ if(m.tipo==='ingreso') ing+=m.valor; else if(m.tipo!=='traspaso') gas+=m.valor; } return {ing:r2(ing),gas:r2(gas),saldo:r2(ing-gas)}; }
-const BANCO=()=>store.get('banco')||'Banco Pichincha';
+const bancos=()=>{ const l=store.get('bancos'); return Array.isArray(l)&&l.length? l : [{id:'b1',n:store.get('banco')||'Banco Pichincha'}]; };
+const bancoDe=m=>{ const l=bancos(); return l.some(b=>b.id===m.banco)? m.banco : l[0].id; };
+const bancoNom=id=>(bancos().find(b=>b.id===id)||bancos()[0]).n;
+const BANCO=()=>bancos().length>1?'tus bancos':bancos()[0].n;
 const cuentaDe=m=>m.pago==='EFECTIVO'?'ef':'bco';
+const pagoTxt=m=>m.pago==='EFECTIVO'?'💵 Efectivo':'🏦 '+(m.pago==='CHEQUE'?'Cheque':'Transf.')+(bancos().length>1?' '+bancoNom(bancoDe(m)):'');
+const selBanco=(id,elId)=>{ const l=bancos(); if(l.length<2) return `<input type="hidden" name="banco" value="${esc(l[0].id)}">`; const cur=l.some(b=>b.id===id)?id:l[0].id;
+  return `<div class="field"><label for="${elId}">Banco</label><select class="inp" id="${elId}" name="banco">${l.map(b=>`<option value="${esc(b.id)}" ${b.id===cur?'selected':''}>${esc(b.n)}</option>`).join('')}</select></div>`; };
 /* saldo en efectivo y en el banco: fondos y gastos según cómo se pagaron, más retiros y depósitos */
-function saldosCuentas(list){ let ef=0,bco=0; for(const m of list){ const v=+m.valor||0;
-    if(m.tipo==='traspaso'){ if(m.dir==='retiro'){ bco-=v; ef+=v; } else { ef-=v; bco+=v; } continue; }
-    const sg=m.tipo==='ingreso'?1:-1; if(cuentaDe(m)==='ef') ef+=sg*v; else bco+=sg*v; }
-  return {ef:r2(ef),bco:r2(bco)}; }
+function saldosCuentas(list){ let ef=0; const por={}; bancos().forEach(b=>por[b.id]=0);
+  for(const m of list){ const v=+m.valor||0, bk=bancoDe(m);
+    if(m.tipo==='traspaso'){ if(m.dir==='retiro'){ por[bk]-=v; ef+=v; } else { ef-=v; por[bk]+=v; } continue; }
+    const sg=m.tipo==='ingreso'?1:-1; if(cuentaDe(m)==='ef') ef+=sg*v; else por[bk]+=sg*v; }
+  for(const k in por) por[k]=r2(por[k]); const bco=r2(Object.values(por).reduce((a,x)=>a+x,0));
+  return {ef:r2(ef),bco,por}; }
 const sortMovs = a => a.slice().sort((x,y)=> y.fecha.localeCompare(x.fecha) || (y.hora||'').localeCompare(x.hora||'') || (y.creado||0)-(x.creado||0));
 
 async function loadCats(){ let cs=await DB.all('cats'); if(!cs.length){ cs=DEFAULT_CATS.map((c,i)=>({...c,orden:i})); await DB.putMany('cats',cs); } CATS=cs.sort((a,b)=>(a.orden??99)-(b.orden??99)); CAT=Object.fromEntries(CATS.map(c=>[c.id,c])); }
@@ -479,9 +488,15 @@ function viewWelcome(){
     <p class="note">La primera opción carga los ${SEED.length} movimientos de la hoja CAJA CHICA de tu Excel (fondo de $1.000 y gastos de octubre 2026).</p></div>`;
 }
 
+function pasaFp(m){ const f=S.fp; if(!f) return true;
+  if(f==='EFECTIVO') return m.tipo==='traspaso' || m.pago==='EFECTIVO';
+  if(f.startsWith('b:')) return (m.tipo==='traspaso' || m.pago!=='EFECTIVO') && bancoDe(m)===f.slice(2);
+  return m.tipo!=='traspaso' && m.pago===f; }
+function fpHTML(){ const ops=[['','Todos'],['EFECTIVO','💵 Efectivo'],['TRANSFERENCIA','🏦 Transferencia'],['CHEQUE','Cheque']]; if(bancos().length>1) bancos().forEach(b=>ops.push(['b:'+b.id,'🏦 '+b.n]));
+  return `<div class="fp-chips" role="group" aria-label="Filtrar por forma de pago">${ops.map(([v,n])=>`<button class="chip ${S.fp===v?'on':''}" data-act="fpago" data-v="${esc(v)}">${esc(n)}</button>`).join('')}</div>`; }
 function filtrar(list){
   const q=S.q.trim().toLowerCase(), qd=q.replace(/[\s\-]/g,''), isNum=/^\d{3,}$/.test(qd);
-  return list.filter(m=> (!S.cat || m.categoria===S.cat) && (!S.d1 || m.fecha>=S.d1) && (!S.d2 || m.fecha<=S.d2) && (!q || (isNum ? [m.numero,m.factura].some(x=>String(x||'').replace(/\D/g,'').includes(qd))
+  return list.filter(m=> (!S.cat || m.categoria===S.cat) && pasaFp(m) && (!S.d1 || m.fecha>=S.d1) && (!S.d2 || m.fecha<=S.d2) && (!q || (isNum ? [m.numero,m.factura].some(x=>String(x||'').replace(/\D/g,'').includes(qd))
     : [m.detalle,m.beneficiario,m.lugar,m.factura,m.numero,m.pago].join(' ').toLowerCase().includes(q))));
 }
 function viewInicio(){
@@ -499,7 +514,7 @@ function viewInicio(){
     <div class="big num ${t.saldo<0?'neg':''}">${money(t.saldo)}</div>
     <div class="bar" title="Gastado ${pct.toFixed(0)}% del fondo"><i style="width:${pct}%"></i></div>
     <div class="bal-row num"><div><small>Fondos recibidos</small><b>${money(t.ing)}</b></div><div><small>Gastado · ${pct.toFixed(0)}%</small><b>${money(t.gas)}</b></div></div>
-    ${(()=>{ const c=saldosCuentas(ms); return `<button class="cuentas" data-act="cuentas"><div><small>💵 Efectivo</small><b class="num ${c.ef<0?'neg':''}">${money(c.ef)}</b></div><div><small>🏦 ${esc(BANCO())}</small><b class="num ${c.bco<0?'neg':''}">${money(c.bco)}</b></div></button>`; })()}
+    ${(()=>{ const c=saldosCuentas(ms); return `<button class="cuentas" data-act="cuentas"><div><small>💵 Efectivo</small><b class="num ${c.ef<0?'neg':''}">${money(c.ef)}</b></div><div><small>🏦 ${bancos().length>1?'Bancos':esc(bancos()[0].n)}</small><b class="num ${c.bco<0?'neg':''}">${money(c.bco)}</b></div></button>`; })()}
   </section>
   <div class="actions">
     <button class="btn btn-primary" data-act="nuevo-gasto">${svg(UI.cam,'').replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Registrar gasto</button>
@@ -511,32 +526,34 @@ function viewInicio(){
   <div class="section-h"><h2>Movimientos</h2>${S.cat?`<button class="link" data-act="filtro-cat" data-c="">Quitar filtro: ${esc(CAT[S.cat]?.n)}</button>`:sinFoto?`<span class="tag warn">${svg(UI.nophoto)}${sinFoto} sin foto</span>`:''}</div>
   <div class="search"><label style="display:contents">${svg(UI.search)}<input id="q" type="search" placeholder="Buscar por detalle, factura o n.º" value="${esc(S.q)}" aria-label="Buscar movimientos"></label><button class="cal-btn ${S.d1||S.d2?'on':''}" data-act="fechas" aria-label="Buscar por fechas" aria-expanded="${S.fechasOpen}">${svg(UI.cal)}</button></div>
   ${S.fechasOpen||S.d1||S.d2?fechasHTML():''}
+  ${fpHTML()}<div class="fechas-res" id="fechas-res" style="margin:-4px 2px 10px">${resumenFechas()}</div>
   <div id="lista">${listaHTML(grupos)}</div>`;
 }
-function gruposLista(ms){ const lista=sortMovs(filtrar(S.q||S.d1||S.d2?ms:ms.filter(m=>!m.pendiente))); const grupos=[]; let g=null;
+function gruposLista(ms){ const lista=sortMovs(filtrar(S.q||S.d1||S.d2||S.fp?ms:ms.filter(m=>!m.pendiente))); const grupos=[]; let g=null;
   for(const m of lista){ if(!g||g.f!==m.fecha){g={f:m.fecha,items:[],tot:0};grupos.push(g);} g.items.push(m); if(m.tipo==='gasto') g.tot+=m.valor; } return grupos; }
-function resumenFechas(){ if(!S.d1&&!S.d2) return ''; const gs=filtrar(movsObra()).filter(m=>m.tipo==='gasto'&&!m.pendiente); const tot=gs.reduce((a,m)=>a+m.valor,0);
+function resumenFechas(){ if(!S.d1&&!S.d2&&!S.fp) return ''; const gs=filtrar(movsObra()).filter(m=>m.tipo==='gasto'&&!m.pendiente); const tot=gs.reduce((a,m)=>a+m.valor,0);
   return `${gs.length} ${gs.length===1?'gasto':'gastos'} · <b class="num">${money(tot)}</b>`; }
 function fechasHTML(){ const hoy=todayISO(), d=new Date(), lun=new Date(d); lun.setDate(d.getDate()-((d.getDay()+6)%7)); const iso=x=>x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
   const rg=[['Hoy',hoy,hoy],['Esta semana',iso(lun),hoy],['Este mes',hoy.slice(0,8)+'01',hoy]], pm=new Date(d.getFullYear(),d.getMonth()-1,1), fm=new Date(d.getFullYear(),d.getMonth(),0); rg.push(['Mes pasado',iso(pm),iso(fm)]);
   return `<div class="fechas" id="fechas">
     <div class="fechas-row"><label><small>Desde</small><input class="inp" type="date" id="fd1" value="${esc(S.d1)}" max="${hoy}"></label><label><small>Hasta</small><input class="inp" type="date" id="fd2" value="${esc(S.d2)}" max="${hoy}"></label></div>
     <div class="chips" style="margin-top:8px">${rg.map(([n,a,b])=>`<button class="chip ${S.d1===a&&S.d2===b?'on':''}" data-act="rango" data-a="${a}" data-b="${b}">${n}</button>`).join('')}<button class="chip" data-act="rango" data-a="" data-b="" id="quitar-f" ${S.d1||S.d2?'':'hidden'}>Quitar fechas</button></div>
-    <div class="fechas-res" id="fechas-res">${resumenFechas()}</div></div>`;
+</div>`;
 }
-function refrescarLista(){ $('#lista').innerHTML=listaHTML(gruposLista(movsObra())); const r=$('#fechas-res'); if(r) r.innerHTML=resumenFechas(); const qf=$('#quitar-f'); if(qf) qf.hidden=!(S.d1||S.d2); const cb=$('.cal-btn'); if(cb) cb.classList.toggle('on',!!(S.d1||S.d2)); document.querySelectorAll('[data-act=rango]').forEach(c=>c.classList.toggle('on',!!c.dataset.a&&c.dataset.a===S.d1&&c.dataset.b===S.d2)); }
+function refrescarLista(){ $('#lista').innerHTML=listaHTML(gruposLista(movsObra())); const r=$('#fechas-res'); if(r) r.innerHTML=resumenFechas(); const qf=$('#quitar-f'); if(qf) qf.hidden=!(S.d1||S.d2); const cb=$('.cal-btn'); if(cb) cb.classList.toggle('on',!!(S.d1||S.d2)); document.querySelectorAll('[data-act=fpago]').forEach(c=>c.classList.toggle('on',c.dataset.v===S.fp)); document.querySelectorAll('[data-act=rango]').forEach(c=>c.classList.toggle('on',!!c.dataset.a&&c.dataset.a===S.d1&&c.dataset.b===S.d2)); }
 function listaHTML(grupos){
-  if(!grupos.length) return `<div class="empty">${S.q||S.cat||S.d1||S.d2?'No hay movimientos que coincidan.':'Todavía no hay movimientos. Toca <b>Registrar gasto</b> para empezar.'}</div>`;
+  if(!grupos.length) return `<div class="empty">${S.q||S.cat||S.d1||S.d2||S.fp?'No hay movimientos que coincidan.':'Todavía no hay movimientos. Toca <b>Registrar gasto</b> para empezar.'}</div>`;
   return grupos.map(g=>`<div class="day"><div class="day-h"><span>${fmtDay(g.f)}</span><span class="num">${g.tot?'−'+money(g.tot):''}</span></div>
   <div class="list">${g.items.map(rowHTML).join('')}</div></div>`).join('');
 }
 function rowHTML(m){
   if(m.tipo==='traspaso') return `<button class="row" data-act="ver" data-id="${m.id}"><span class="ico" style="--c:var(--muted)">${svg(PAGOS[1].i)}</span>
-    <div class="mid"><div class="t">${esc(m.detalle||'')}</div><div class="s">${m.dir==='retiro'?esc(BANCO())+' → Efectivo':'Efectivo → '+esc(BANCO())}</div></div>
+    <div class="mid"><div class="t">${esc(m.detalle||'')}</div><div class="s">${m.dir==='retiro'?esc(bancoNom(bancoDe(m)))+' → Efectivo':'Efectivo → '+esc(bancoNom(bancoDe(m)))}</div></div>
     <div class="amt"><b class="num" style="color:var(--muted)">${money(m.valor)}</b></div></button>`;
   const ing=m.tipo==='ingreso';
-  let sub=ing? (m.pago? cap(m.pago):'Fondo') : m.persona? `${m.beneficiario} · pago sin factura` : [m.beneficiario,m.lugar].filter(Boolean).join(' · ') || (CAT[m.categoria]?.n||'');
+  let sub=ing? (m.pago? pagoTxt(m):'Fondo') : m.persona? `${m.beneficiario} · pago sin factura` : [m.beneficiario,m.lugar].filter(Boolean).join(' · ') || (CAT[m.categoria]?.n||'');
   const qd=S.q.replace(/\D/g,''); if(m.numero && qd.length>=3 && String(m.numero).replace(/\D/g,'').includes(qd)) sub=`${m.pago==='CHEQUE'?'Cheque':'Transf.'} n.º ${m.numero} · `+sub;
+  if(!ing && !m.pendiente) sub=pagoTxt(m)+(sub?' · '+sub:'');
   return `<button class="row" data-act="ver" data-id="${m.id}">
     ${ing?`<span class="ico" style="--c:var(--good)">${svg(IC.INGRESO)}</span>`:catIcon(m.categoria)}
     <div class="mid"><div class="t">${esc((m.detalle||'Sin detalle').replace(/\n+/g,' · '))}</div><div class="s">${esc(sub)}</div></div>
@@ -688,8 +705,9 @@ function renderWz(){
     <div class="field"><label for="w-fact">Número de factura</label><input class="inp num ${au('factura')}" id="w-fact" data-f="factura" inputmode="numeric" placeholder="001-001-000000123" value="${esc(d.factura)}"><small>Escribe solo los números, los guiones se ponen solos. Déjalo vacío si no te dieron factura.</small></div>
     <div class="field"><label for="w-fecha">Fecha y hora del gasto</label><div style="display:flex;gap:8px"><input class="inp ${au('fecha')}" style="flex:1.6" type="date" id="w-fecha" data-f="fecha" value="${esc(d.fecha)}" max="${todayISO()}"><input class="inp ${au('hora')}" style="flex:1" type="time" id="w-hora" data-f="hora" value="${esc(d.hora||'')}" aria-label="Hora"></div>
     <div class="chips" style="margin-top:4px"><button class="chip ${d.fecha===todayISO()?'on':''}" data-act="w-fecha" data-v="0">Hoy</button><button class="chip ${d.fecha===todayISO(-1)?'on':''}" data-act="w-fecha" data-v="-1">Ayer</button><button class="chip ${d.fecha===todayISO(-2)?'on':''}" data-act="w-fecha" data-v="-2">Anteayer</button></div></div>`;
-  if(st==='pago') body=`<div class="q">¿Cómo pagaste?</div><p class="hint">${d.pago==='EFECTIVO'?'Sale de tu <b>efectivo</b>.':'Sale de <b>'+esc(BANCO())+'</b>.'}</p>
+  if(st==='pago') body=`<div class="q">¿Cómo pagaste?</div><p class="hint">${d.pago==='EFECTIVO'?'Sale de tu <b>efectivo</b>.':'Sale de <b>'+esc(bancoNom(bancoDe(d)))+'</b>.'}</p>
     <div class="pay-opts">${PAGOS.map(p=>`<button class="pay ${d.pago===p.id?'on':''}" data-act="w-pago" data-p="${p.id}">${svg(p.i)}${p.n}</button>`).join('')}</div>
+    ${d.pago!=='EFECTIVO'&&bancos().length>1?`<div class="field" style="margin-top:12px"><label>¿De qué banco?</label><div class="chips">${bancos().map(bk=>`<button class="chip ${bancoDe(d)===bk.id?'on':''}" data-act="w-banco" data-b="${esc(bk.id)}">🏦 ${esc(bk.n)}</button>`).join('')}</div></div>`:''}
     ${d.pago!=='EFECTIVO'?compHTML():''}`;
   if(st==='revisar' && W.mode==='persona'){ const c=CAT[d.categoria]; const ed=i=>`<button class="edit" data-act="w-go" data-s="${i}">Cambiar</button>`;
     body=`<div class="q">Revisa y guarda</div><p class="hint">Pago sin factura en <b style="color:var(--ink)">${esc(obra().nombre)}</b>.</p>
@@ -734,7 +752,7 @@ async function wzSave(){
   W.step=STEPS.length-1; const per=W.mode==='persona';
   const d=W.d, prev=W.isNew?null:S.movs.find(m=>m.id===W.id);
   const m={ id:W.id||uid(), obraId:prev?.obraId||S.obraId, tipo:'gasto', fecha:d.fecha, hora:d.hora||'', detalle:sinVinetas(d.detalle).toUpperCase(), beneficiario:d.beneficiario.trim().toUpperCase(), lugar:per?'':d.lugar.trim().toUpperCase(),
-    factura:per?'':d.factura.trim(), ruc:per?'':(d.ruc||prev?.ruc||''), persona:per, pago:d.pago, numero:d.pago==='EFECTIVO'?'':d.numero.trim(), valor:parseMonto(d.valor), categoria:d.categoria, fotoId:prev?.fotoId||null, compId:prev?.compId||null, audioId:prev?.audioId||null, voz:prev?.voz||'', pendiente:false, ocrTexto:W.ocr?.texto??prev?.ocrTexto??'', ocrComp:W.ocrC?.texto??prev?.ocrComp??'', creado:prev?.creado||Date.now(), editado:Date.now() };
+    factura:per?'':d.factura.trim(), ruc:per?'':(d.ruc||prev?.ruc||''), persona:per, pago:d.pago, numero:d.pago==='EFECTIVO'?'':d.numero.trim(), banco:d.pago==='EFECTIVO'?'':bancoDe(d), valor:parseMonto(d.valor), categoria:d.categoria, fotoId:prev?.fotoId||null, compId:prev?.compId||null, audioId:prev?.audioId||null, voz:prev?.voz||'', pendiente:false, ocrTexto:W.ocr?.texto??prev?.ocrTexto??'', ocrComp:W.ocrC?.texto??prev?.ocrComp??'', creado:prev?.creado||Date.now(), editado:Date.now() };
   if(d.pago==='EFECTIVO' && W.comp){ W.comp=null; W.compChanged=true; }
   if(W.compChanged){ if(m.compId) await DB.del('fotos',m.compId); m.compId=null; if(W.comp){ m.compId=uid(); await DB.put('fotos',{id:m.compId,blob:W.comp}); } }
   if(W.fotoChanged){ if(m.fotoId) await DB.del('fotos',m.fotoId); m.fotoId=null; if(W.foto){ m.fotoId=uid(); await DB.put('fotos',{id:m.fotoId,blob:W.foto}); } }
@@ -1481,7 +1499,7 @@ async function verMov(id){
       <div class="rv"><span>Lugar</span><b>${esc(m.lugar||'—')}</b></div>
       <div class="rv"><span>Factura</span><b class="num">${esc(m.factura||'Sin factura')}</b></div>`}
       <div class="rv"><span>Fecha</span><b>${fmtDate(m.fecha)}${m.hora?' · '+esc(m.hora):''}</b></div>
-      <div class="rv"><span>Pago</span><b>${cap(m.pago)}${m.numero?' · '+esc(m.numero):''}</b></div>
+      <div class="rv"><span>Pago</span><b>${esc(pagoTxt(m).replace(/^\S+ /,''))}${m.numero?' · '+esc(m.numero):''}</b></div>
       <div class="rv"><span>Obra</span><b>${esc(S.obras.find(o=>o.id===m.obraId)?.nombre||'')}</b></div></div>
     <div class="two"><button class="btn btn-ghost" data-act="editar" data-id="${m.id}">Editar</button><button class="btn btn-danger" data-act="borrar" data-id="${m.id}">Eliminar</button></div>`);
 }
@@ -1495,7 +1513,8 @@ function formIngreso(m){
     <div class="money" style="margin-bottom:16px"><span>$</span><input id="i-valor" name="valor" inputmode="decimal" placeholder="0,00" value="${m?String(m.valor).replace('.',','):''}" aria-label="Valor"></div>
     <div class="field"><label for="i-det">Concepto</label><input class="inp" id="i-det" name="detalle" value="${esc(d.detalle)}" list="dl-ing"><datalist id="dl-ing"><option value="FONDO CAJA CHICA"></option><option value="REPOSICIÓN CAJA CHICA"></option><option value="ANTICIPO"></option></datalist></div>
     <div class="field"><label for="i-fecha">Fecha</label><input class="inp" type="date" id="i-fecha" name="fecha" value="${d.fecha}"></div>
-    <div class="field"><label for="i-pago">¿Cómo te llegó?</label><select class="inp" id="i-pago" name="pago">${PAGOS.map(p=>`<option value="${p.id}" ${d.pago===p.id?'selected':''}>${p.id==='EFECTIVO'?'Efectivo (en mano)':p.n+' (a '+esc(BANCO())+')'}</option>`).join('')}</select></div>
+    <div class="field"><label for="i-pago">¿Cómo te llegó?</label><select class="inp" id="i-pago" name="pago">${PAGOS.map(p=>`<option value="${p.id}" ${d.pago===p.id?'selected':''}>${p.id==='EFECTIVO'?'Efectivo (en mano)':p.n+' (al banco)'}</option>`).join('')}</select></div>
+    ${selBanco(d.banco,'i-banco')}
     <div class="field"><label for="i-num">Número de transferencia o cheque</label><input class="inp num" id="i-num" name="numero" inputmode="numeric" value="${esc(d.numero)}"></div>
     <p id="i-err" class="note" style="color:var(--bad)" role="alert"></p>
     <button class="btn btn-primary btn-block" type="submit">Guardar fondo</button></form>`);
@@ -1503,26 +1522,30 @@ function formIngreso(m){
 async function saveIngreso(form){
   const fd=new FormData(form), v=parseMonto(fd.get('valor')); if(!(v>0)){ $('#i-err').textContent='Escribe el valor recibido.'; return; }
   const id=form.dataset.id, prev=S.movs.find(m=>m.id===id);
-  await DB.put('movs',{id:id||uid(),obraId:prev?.obraId||S.obraId,tipo:'ingreso',fecha:fd.get('fecha')||todayISO(),detalle:String(fd.get('detalle')||'FONDO').trim().toUpperCase(),pago:fd.get('pago'),numero:String(fd.get('numero')||'').trim(),valor:v,categoria:'',fotoId:null,creado:prev?.creado||Date.now()});
+  await DB.put('movs',{id:id||uid(),obraId:prev?.obraId||S.obraId,tipo:'ingreso',fecha:fd.get('fecha')||todayISO(),detalle:String(fd.get('detalle')||'FONDO').trim().toUpperCase(),pago:fd.get('pago'),banco:fd.get('pago')==='EFECTIVO'?'':(fd.get('banco')||''),numero:String(fd.get('numero')||'').trim(),valor:v,categoria:'',fotoId:null,creado:prev?.creado||Date.now()});
   await loadAll(); closeLayer(); render(); toast('Fondo guardado');
 }
 
 /* ---------- efectivo y banco ---------- */
-function verCuentas(){ const c=saldosCuentas(movsObra()), B=esc(BANCO());
-  openLayer(`${sheetHead('Efectivo y banco')}
-    <div class="cta-box num"><div><small>💵 Efectivo (en mano)</small><b class="${c.ef<0?'neg':''}">${money(c.ef)}</b></div><div><small>🏦 ${B}</small><b class="${c.bco<0?'neg':''}">${money(c.bco)}</b></div></div>
-    <p class="hint" style="margin-top:-4px">Los fondos y gastos en <b>efectivo</b> van a Efectivo. Los de <b>transferencia o cheque</b> van a ${B}. La suma de los dos es tu saldo.</p>
+function verCuentas(){ const c=saldosCuentas(movsObra()), B=esc(BANCO()), BL=bancos(), BI='<path d="M3 10h18M5 10v8M19 10v8M9 10v8M15 10v8M3 20h18M12 3l9 5H3z"/>';
+  openLayer(`${sheetHead('Efectivo y bancos')}
+    <div class="menu" style="margin-bottom:12px">
+      <button class="mi" data-act="fpago-ir" data-v="EFECTIVO"><span class="ico" style="--c:var(--good)">${svg(PAGOS[0].i)}</span><div class="mid"><div class="t">Efectivo (en mano)</div><div class="s">Toca para ver sus movimientos</div></div><b class="num ${c.ef<0?'neg':''}" style="font-family:var(--f-display)">${money(c.ef)}</b></button>
+      ${BL.map(bk=>`<button class="mi" data-act="fpago-ir" data-v="b:${esc(bk.id)}"><span class="ico" style="--c:var(--ink)">${svg(BI)}</span><div class="mid"><div class="t">${esc(bk.n)}</div><div class="s">Transferencias y cheques</div></div><b class="num ${c.por[bk.id]<0?'neg':''}" style="font-family:var(--f-display)">${money(c.por[bk.id])}</b></button>`).join('')}
+    </div>
+    <p class="hint" style="margin-top:-4px">Los fondos y gastos en <b>efectivo</b> van a Efectivo. Los de <b>transferencia o cheque</b> van al banco que elijas. Todo junto da tu saldo de <b class="num">${money(r2(c.ef+c.bco))}</b>.</p>
     ${c.ef<0||c.bco<0?`<p class="note" style="color:var(--warn);margin-top:-4px">${c.ef<0?'El efectivo':'El banco'} sale negativo porque antes no se anotaban los retiros del banco. Toca <b>Cuadrar con lo que tengo</b> una vez y queda bien.</p>`:''}
     <div class="mv-opts">
       <button class="pay" data-act="tras" data-d="retiro"><span class="ico" style="--c:var(--good)">${svg(UI.down)}</span><div><div>Saqué plata del banco</div><small>Retiro de ${B} a efectivo</small></div></button>
       <button class="pay" data-act="tras" data-d="deposito"><span class="ico" style="--c:var(--ink)">${svg(PAGOS[1].i)}</span><div><div>Deposité efectivo en el banco</div><small>De efectivo a ${B}</small></div></button>
       <button class="pay" data-act="cuadrar"><span class="ico" style="--c:var(--warn)">${svg(PAGOS[0].i)}</span><div><div>Cuadrar con lo que tengo</div><small>Cuenta tu efectivo y la app ajusta el banco</small></div></button>
-      <button class="pay" data-act="banco-nombre"><span class="ico" style="--c:var(--muted)">${svg('<path d="M3 10h18M5 10v8M19 10v8M9 10v8M15 10v8M3 20h18M12 3l9 5H3z"/>')}</span><div><div>Nombre del banco</div><small>${B}</small></div></button>
+      <button class="pay" data-act="banco-add"><span class="ico" style="--c:var(--good)">${svg(BI)}</span><div><div>+ Agregar otro banco</div><small>Produbanco, Guayaquil, Pacífico, cooperativa…</small></div></button>
+      ${BL.map(bk=>`<button class="pay" data-act="banco-edit" data-b="${esc(bk.id)}"><span class="ico" style="--c:var(--muted)">${svg(BI)}</span><div><div>Cambiar o quitar ${esc(bk.n)}</div><small>Nombre del banco</small></div></button>`).join('')}
     </div>`); }
 function formTraspaso(dir,m){ const B=esc(BANCO()); const d=m||{fecha:todayISO(),valor:'',numero:''};
   openLayer(`${sheetHead(dir==='retiro'?'Retiro del banco':'Depósito al banco')}
     <p class="hint" style="margin-top:-4px">${dir==='retiro'?`Pasa plata de ${B} a tu efectivo.`:`Pasa plata de tu efectivo a ${B}.`} No cambia el saldo total.</p>
-    <form id="f-tras" data-id="${m?.id||''}" data-dir="${dir}">
+    <form id="f-tras" data-id="${m?.id||''}" data-dir="${dir}">${selBanco(m?.banco,'t-banco')}
     <div class="money" style="margin-bottom:16px"><span>$</span><input id="t-valor" name="valor" inputmode="decimal" placeholder="0,00" value="${m?String(m.valor).replace('.',','):''}" aria-label="Valor"></div>
     <div class="field"><label for="t-fecha">Fecha</label><input class="inp" type="date" id="t-fecha" name="fecha" value="${d.fecha}" max="${todayISO()}"></div>
     <div class="field"><label for="t-num">Número de comprobante (opcional)</label><input class="inp num" id="t-num" name="numero" inputmode="numeric" value="${esc(d.numero||'')}"></div>
@@ -1531,18 +1554,18 @@ function formTraspaso(dir,m){ const B=esc(BANCO()); const d=m||{fecha:todayISO()
     ${m?`<button class="btn btn-danger btn-block" type="button" style="margin-top:10px" data-act="borrar" data-id="${m.id}">Eliminar</button>`:''}</form>`); }
 async function saveTraspaso(form){ const fd=new FormData(form), v=parseMonto(fd.get('valor')); if(!(v>0)){ $('#t-err').textContent='Escribe el valor.'; return; }
   const id=form.dataset.id, prev=S.movs.find(m=>m.id===id), dir=form.dataset.dir;
-  await DB.put('movs',{id:id||uid(),obraId:prev?.obraId||S.obraId,tipo:'traspaso',dir,fecha:fd.get('fecha')||todayISO(),hora:prev?.hora||horaAhora(),detalle:dir==='retiro'?'RETIRO DEL BANCO':'DEPÓSITO AL BANCO',pago:dir==='retiro'?'EFECTIVO':'TRANSFERENCIA',numero:String(fd.get('numero')||'').trim(),valor:v,categoria:'',fotoId:null,creado:prev?.creado||Date.now()});
+  await DB.put('movs',{id:id||uid(),obraId:prev?.obraId||S.obraId,tipo:'traspaso',dir,banco:fd.get('banco')||bancos()[0].id,fecha:fd.get('fecha')||todayISO(),hora:prev?.hora||horaAhora(),detalle:dir==='retiro'?'RETIRO DEL BANCO':'DEPÓSITO AL BANCO',pago:dir==='retiro'?'EFECTIVO':'TRANSFERENCIA',numero:String(fd.get('numero')||'').trim(),valor:v,categoria:'',fotoId:null,creado:prev?.creado||Date.now()});
   await loadAll(); closeLayer(); render(); toast(dir==='retiro'?'Retiro guardado':'Depósito guardado'); }
 function formCuadrar(){ const c=saldosCuentas(movsObra());
   openLayer(`${sheetHead('Cuadrar efectivo')}
     <p class="hint" style="margin-top:-4px">Cuenta los billetes y monedas que tienes de esta obra y escribe el total. La app pasa la diferencia entre efectivo y ${esc(BANCO())}; el saldo total no cambia.</p>
-    <form id="f-cuadrar"><div class="money" style="margin-bottom:10px"><span>$</span><input id="c-valor" name="valor" inputmode="decimal" placeholder="0,00" aria-label="Efectivo que tienes"></div>
+    <form id="f-cuadrar">${bancos().length>1?selBanco('', 'c-banco').replace('<label for="c-banco">Banco</label>','<label for="c-banco">La diferencia va a</label>'):'<input type="hidden" name="banco" value="'+esc(bancos()[0].id)+'">'}<div class="money" style="margin-bottom:10px"><span>$</span><input id="c-valor" name="valor" inputmode="decimal" placeholder="0,00" aria-label="Efectivo que tienes"></div>
     <p class="note">La app calcula ahora: <b class="num">${money(c.ef)}</b> en efectivo.</p>
     <p id="c-err" class="note" style="color:var(--bad)" role="alert"></p>
     <button class="btn btn-primary btn-block" type="submit">Cuadrar</button></form>`); }
-async function saveCuadrar(form){ const raw=String(new FormData(form).get('valor')||'').trim(); const v=parseMonto(raw); if(raw===''||isNaN(v)||v<0){ $('#c-err').textContent='Escribe cuánto efectivo tienes (puede ser 0).'; return; }
+async function saveCuadrar(form){ const bk=new FormData(form).get('banco')||bancos()[0].id; const raw=String(new FormData(form).get('valor')||'').trim(); const v=parseMonto(raw); if(raw===''||isNaN(v)||v<0){ $('#c-err').textContent='Escribe cuánto efectivo tienes (puede ser 0).'; return; }
   const c=saldosCuentas(movsObra()), dif=r2(v-c.ef); if(Math.abs(dif)<.005){ closeLayer(); toast('Ya está cuadrado'); return; }
-  await DB.put('movs',{id:uid(),obraId:S.obraId,tipo:'traspaso',dir:dif>0?'retiro':'deposito',fecha:todayISO(),hora:horaAhora(),detalle:'AJUSTE EFECTIVO / BANCO',pago:dif>0?'EFECTIVO':'TRANSFERENCIA',numero:'',valor:Math.abs(dif),categoria:'',fotoId:null,creado:Date.now()});
+  await DB.put('movs',{id:uid(),obraId:S.obraId,tipo:'traspaso',dir:dif>0?'retiro':'deposito',banco:bk,fecha:todayISO(),hora:horaAhora(),detalle:'AJUSTE EFECTIVO / BANCO',pago:dif>0?'EFECTIVO':'TRANSFERENCIA',numero:'',valor:Math.abs(dif),categoria:'',fotoId:null,creado:Date.now()});
   await loadAll(); closeLayer(); render(); toast('Listo: efectivo '+money(v)); }
 
 /* ---------- obras: crear/editar ---------- */
@@ -1606,7 +1629,7 @@ async function exportar(scope){
     let r=2;
     for(const m of ms){
       const ing=m.tipo==='ingreso';
-      const row=ws.getRow(r); row.values=[parseISO(m.fecha),m.hora||'',(m.detalle||'').includes('\n')?conVinetas(m.detalle):m.detalle,m.beneficiario||'',m.lugar||'-',m.persona?'SIN FACTURA':(m.factura||(m.pendiente?'PENDIENTE':'-')),m.pago,m.numero||'-',ing?m.valor:null,ing?null:m.valor,ing?'':m.categoria,'',''];
+      const row=ws.getRow(r); row.values=[parseISO(m.fecha),m.hora||'',(m.detalle||'').includes('\n')?conVinetas(m.detalle):m.detalle,m.beneficiario||'',m.lugar||'-',m.persona?'SIN FACTURA':(m.factura||(m.pendiente?'PENDIENTE':'-')),(m.pago&&m.pago!=='EFECTIVO'&&bancos().length>1?m.pago+' '+bancoNom(bancoDe(m)).toUpperCase():m.pago),m.numero||'-',ing?m.valor:null,ing?null:m.valor,ing?'':m.categoria,'',''];
       row.getCell(1).numFmt='dd/mm/yyyy'; row.getCell(9).numFmt='#,##0.00'; row.getCell(10).numFmt='#,##0.00';
       row.eachCell({includeEmpty:true},c=>{c.border=border;c.alignment={vertical:'middle',wrapText:c.col===3||c.col===4||c.col===5};}); { const nl=(m.detalle||'').split('\n').length; if(nl>2) row.height=Math.max(row.height||0,15*nl); }
       for(const [fid,col] of [[m.fotoId,11],[m.compId,12]]){ if(!fid) continue; const f=await DB.get('fotos',fid); if(f){ const sm=await compress(f.blob,1000,.72); const b64=await blobToDataURL(sm.blob);
@@ -1676,12 +1699,12 @@ async function fotosZip(scope){
 async function backup(){
   toast('Preparando respaldo…');
   const fotos=await DB.all('fotos'); const fs=[]; for(const f of fotos) fs.push({id:f.id,data:await blobToDataURL(f.blob)});
-  const json=JSON.stringify({app:'caja-chica-obra',version:1,exportado:new Date().toISOString(),obras:S.obras,movs:S.movs,cats:CATS,fotos:fs});
+  const json=JSON.stringify({app:'caja-chica-obra',version:1,exportado:new Date().toISOString(),obras:S.obras,movs:S.movs,cats:CATS,bancos:bancos(),fotos:fs});
   entregar(new Blob([json],{type:'application/json'}),`Respaldo_CajaChica_${todayISO()}.json`);
 }
 async function restore(file){
   try{ const j=JSON.parse(await file.text()); if(j.app!=='caja-chica-obra') throw new Error();
-    await DB.putMany('obras',j.obras||[]); await DB.putMany('movs',j.movs||[]); if(j.cats&&j.cats.length) await DB.putMany('cats',j.cats);
+    await DB.putMany('obras',j.obras||[]); await DB.putMany('movs',j.movs||[]); if(Array.isArray(j.bancos)&&j.bancos.length) store.set('bancos',j.bancos); if(j.cats&&j.cats.length) await DB.putMany('cats',j.cats);
     for(const f of j.fotos||[]){ const b=await (await fetch(f.data)).blob(); await DB.put('fotos',{id:f.id,blob:b}); }
     await loadAll(); S.view='inicio'; render(); toast(`Respaldo cargado: ${(j.movs||[]).length} movimientos`);
   }catch(e){ toast('Ese archivo no es un respaldo de esta app.'); }
@@ -1731,7 +1754,13 @@ document.addEventListener('click',async e=>{
     case 'cuentas': verCuentas(); break;
     case 'tras': formTraspaso(b.dataset.d); break;
     case 'cuadrar': formCuadrar(); break;
-    case 'banco-nombre': { const n=prompt('Nombre de tu banco',BANCO()); if(n&&n.trim()){ store.set('banco',n.trim()); closeLayer(); render(); verCuentas(); } break; }
+    case 'banco-add': { const n=prompt('Nombre del banco nuevo'); if(n&&n.trim()){ const l=bancos(); l.push({id:'b'+Date.now().toString(36),n:n.trim()}); store.set('bancos',l); render(); verCuentas(); toast('Banco agregado'); } break; }
+    case 'banco-edit': { const l=bancos(), bk=l.find(x=>x.id===b.dataset.b); if(!bk) break; const usado=S.movs.some(m=>(m.tipo==='traspaso'||(m.pago&&m.pago!=='EFECTIVO'))&&bancoDe(m)===bk.id);
+      const n=prompt(`Nuevo nombre para ${bk.n}${!usado&&l.length>1?' (déjalo vacío para quitarlo)':''}`,bk.n); if(n===null) break;
+      if(!n.trim()){ if(usado||l.length<2){ toast(usado?'Ese banco tiene movimientos; no se puede quitar.':'Necesitas al menos un banco.'); break; } store.set('bancos',l.filter(x=>x.id!==bk.id)); if(S.fp==='b:'+bk.id) S.fp=''; }
+      else { bk.n=n.trim(); store.set('bancos',l); }
+      render(); verCuentas(); break; }
+    case 'fpago-ir': S.fp=b.dataset.v; closeLayer(); S.view='inicio'; render(); setTimeout(()=>$('#lista')?.scrollIntoView({behavior:'smooth',block:'start'}),50); break;
     case 'close': closeLayer(); break;
     case 'wz-close': if(W && (W.fotoUrl||W.d.valor||W.d.detalle) && W.isNew){ if(!arm(b,'wz','?')) { b.innerHTML='<b style="font-size:11px;color:var(--bad)">¿Salir?</b>'; return; } } closeLayer(); break;
     case 'foto-dir': FOTO_DIR={id:b.dataset.id,t:b.dataset.t}; $(b.dataset.src==='gal'?'#f-gal':'#f-cam').click(); break;
@@ -1747,6 +1776,8 @@ document.addEventListener('click',async e=>{
     case 'w-cat': W.d.categoria=b.dataset.c; document.querySelectorAll('.cat-opt').forEach(x=>x.classList.toggle('on',x===b)); break;
     case 'w-fecha': W.d.fecha=todayISO(+b.dataset.v); renderWz(); break;
     case 'w-pago': W.d.pago=b.dataset.p; renderWz(); break;
+    case 'w-banco': W.d.banco=b.dataset.b; renderWz(); break;
+    case 'fpago': S.fp=b.dataset.v; refrescarLista(); break;
     case 'w-next': { const err=wzValid(); if(err){ $('#w-err').textContent=err; return; } W.step++; renderWz(); break; }
     case 'w-back': W.step--; W.aviso=null; renderWz(); break;
     case 'w-go': W.step=+b.dataset.s; W.aviso=null; if(W.step<steps().length-1) W.volver=true; renderWz(); break;
