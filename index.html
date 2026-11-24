@@ -167,6 +167,7 @@ audio{width:100%;height:40px}
 .search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 12px;margin-bottom:10px}
 .search input{border:0;background:transparent;flex:1;padding:11px 0;min-width:0;outline:none}
 .search svg{width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:2}
+.foto-tools{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 10px}.foto-tools .chip{padding:7px 12px;font-size:13.5px}
 .add-foto{margin-bottom:12px;padding:12px}.add-foto .two{margin:0}.add-foto-mini{display:flex;align-items:center;gap:8px;margin:-4px 0 12px}.add-foto-mini span{font-size:13px;color:var(--muted);flex:none}.add-foto-mini .two{flex:1;margin:0}.add-foto-mini .btn{padding:8px 10px;font-size:13.5px;min-height:0}
 .fp-chips{display:flex;gap:6px;overflow-x:auto;margin:0 0 10px;padding-bottom:2px;scrollbar-width:none}.fp-chips::-webkit-scrollbar{display:none}.fp-chips .chip{flex:none;padding:6px 12px;font-size:13px}
 .cal-btn{border:0;background:transparent;padding:8px;margin-right:-6px;border-radius:10px;display:grid;place-items:center;flex:none}.cal-btn svg{width:20px;height:20px;stroke:var(--ink)}.cal-btn.on{background:var(--ink)}.cal-btn.on svg{stroke:var(--bg)}
@@ -306,8 +307,10 @@ audio{width:100%;height:40px}
 
 .viewer{position:fixed;inset:0;z-index:60;background:#000;overflow:auto;display:flex;align-items:center;justify-content:center}
 .viewer img{max-width:100%;max-height:100%}
-.viewer.zoom{display:block}
-.viewer.zoom img{max-width:none;max-height:none;width:220%}
+.viewer{touch-action:none;overflow:hidden;user-select:none;-webkit-user-select:none}.viewer img{transform-origin:center center;will-change:transform;-webkit-user-drag:none}
+.viewer .vz{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;background:rgba(0,0,0,.55);padding:6px;border-radius:999px}
+.viewer .vz button{border:0;background:rgba(255,255,255,.16);color:#fff;min-width:48px;height:44px;border-radius:999px;font-size:20px;font-weight:700}
+.viewer .vz-hint{position:fixed;top:calc(20px + env(safe-area-inset-top,0px));left:16px;right:70px;color:rgba(255,255,255,.75);font-size:13px;pointer-events:none;animation:vzh 3s forwards}@keyframes vzh{0%,70%{opacity:1}100%{opacity:0}}
 .viewer .x{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));background:rgba(255,255,255,.15);border:0;color:#fff}
 
 .toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:80;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
@@ -662,10 +665,11 @@ function elegirTipo(){ openLayer(`${sheetHead('¿Qué vas a registrar?')}<div cl
   <button class="pay" data-act="nuevo-persona"><span class="ico" style="--c:var(--ink)">${svg(UI.person)}</span><div><div>Pago a una persona</div><small>Adelantos, comida, jornales. Sin factura.</small></div></button></div>`); }
 function nuevoGasto(mode='factura'){ W={mode,step:0,isNew:true,d:{tipo:'gasto',fecha:todayISO(),hora:horaAhora(),pago:'EFECTIVO',valor:'',categoria:'',detalle:'',lugar:'',beneficiario:'',factura:'',numero:''},foto:null,fotoUrl:null,fotoChanged:false,comp:null,compUrl:null,compChanged:false,auto:new Set(),ocr:null,ocrC:null}; renderWz(); }
 async function editarGasto(m){ W={mode:m.persona?'persona':'factura',isNew:false,id:m.id,d:{...m,valor:String(m.valor).replace('.',',')},foto:null,fotoUrl:null,fotoChanged:false,comp:null,compUrl:null,compChanged:false,auto:new Set(),ocr:null,ocrC:null}; W.step=steps().length-1;
-  if(m.compId){ const f=await DB.get('fotos',m.compId); if(f){W.comp=f.blob;W.compUrl=URL.createObjectURL(f.blob);} }
+  W.rec={};
+  if(m.compId){ const f=await DB.get('fotos',m.compId); if(f){W.comp=f.blob;W.compUrl=URL.createObjectURL(f.blob);W.rec.comp=f;} }
   if(m.audioId){ const f=await DB.get('fotos',m.audioId); if(f) W.audioUrl=URL.createObjectURL(f.blob); }
   if(m.pendiente){ W.step=0; W.pend=true; if(!m.valor) W.d.valor=''; }
-  if(m.fotoId){ const f=await DB.get('fotos',m.fotoId); if(f){W.foto=f.blob;W.fotoUrl=URL.createObjectURL(f.blob);} } renderWz(); }
+  if(m.fotoId){ const f=await DB.get('fotos',m.fotoId); if(f){W.foto=f.blob;W.fotoUrl=URL.createObjectURL(f.blob);W.rec.fact=f;} } renderWz(); }
 function sugerencias(campo,soloPersonas=false){ const c={}; S.movs.forEach(m=>{ if(m[campo] && (!soloPersonas||m.persona)) c[m[campo]]=(c[m[campo]]||0)+1; }); return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,40).map(x=>x[0]); }
 const dl=(id,campo,p=false)=>`<datalist id="${id}">${sugerencias(campo,p).map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`;
 
@@ -754,8 +758,8 @@ async function wzSave(){
   const m={ id:W.id||uid(), obraId:prev?.obraId||S.obraId, tipo:'gasto', fecha:d.fecha, hora:d.hora||'', detalle:sinVinetas(d.detalle).toUpperCase(), beneficiario:d.beneficiario.trim().toUpperCase(), lugar:per?'':d.lugar.trim().toUpperCase(),
     factura:per?'':d.factura.trim(), ruc:per?'':(d.ruc||prev?.ruc||''), persona:per, pago:d.pago, numero:d.pago==='EFECTIVO'?'':d.numero.trim(), banco:d.pago==='EFECTIVO'?'':bancoDe(d), valor:parseMonto(d.valor), categoria:d.categoria, fotoId:prev?.fotoId||null, compId:prev?.compId||null, audioId:prev?.audioId||null, voz:prev?.voz||'', pendiente:false, ocrTexto:W.ocr?.texto??prev?.ocrTexto??'', ocrComp:W.ocrC?.texto??prev?.ocrComp??'', creado:prev?.creado||Date.now(), editado:Date.now() };
   if(d.pago==='EFECTIVO' && W.comp){ W.comp=null; W.compChanged=true; }
-  if(W.compChanged){ if(m.compId) await DB.del('fotos',m.compId); m.compId=null; if(W.comp){ m.compId=uid(); await DB.put('fotos',{id:m.compId,blob:W.comp}); } }
-  if(W.fotoChanged){ if(m.fotoId) await DB.del('fotos',m.fotoId); m.fotoId=null; if(W.foto){ m.fotoId=uid(); await DB.put('fotos',{id:m.fotoId,blob:W.foto}); } }
+  if(W.compChanged){ if(m.compId) await DB.del('fotos',m.compId); m.compId=null; if(W.comp){ m.compId=uid(); await DB.put('fotos',await recFoto(m.compId,W.comp,W.sc&&W.sc.comp)); } }
+  if(W.fotoChanged){ if(m.fotoId) await DB.del('fotos',m.fotoId); m.fotoId=null; if(W.foto){ m.fotoId=uid(); await DB.put('fotos',await recFoto(m.fotoId,W.foto,W.sc&&W.sc.fact)); } }
   await DB.put('movs',m); if(W.fotoUrl) URL.revokeObjectURL(W.fotoUrl);
   await loadAll(); closeLayer(); S.view='inicio'; render(); toast(prev?.pendiente?'Gasto completado':W===null&&prev?'Gasto actualizado':'Gasto guardado'); askPersist();
 }
@@ -998,9 +1002,9 @@ async function blobDeCanvas(c,q=.85){ return await new Promise(r=>c.toBlob(r,'im
 async function bitmapDe(blob,max=2400){ const url=URL.createObjectURL(blob); try{ const img=await loadImg(url); const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)); const c=document.createElement('canvas'); c.width=Math.round(img.naturalWidth*s); c.height=Math.round(img.naturalHeight*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c; } finally{ URL.revokeObjectURL(url); } }
 const QUAD_TODO=[[0,0],[1,0],[1,1],[0,1]], QUAD_DEF=[[.05,.05],[.95,.05],[.95,.95],[.05,.95]];
 /* escáner a pantalla completa: 1) esquinas con lupa  2) filtro.  Devuelve {blob,origC,quad,filtro} o null si se cancela */
-function escanearDoc(origC,quad,filtro='mejorada'){
+function escanearDoc(origC,quad,filtro='mejorada',inicio='esquinas'){
   return new Promise(resolve=>{
-    let q=(quad||QUAD_DEF).map(p=>p.slice()), paso='esquinas', outC=null, fil=filtro;
+    let q=(quad||QUAD_DEF).map(p=>p.slice()), paso=inicio, outC=null, fil=filtro;
     const root=document.createElement('div'); root.className='crop'; root.setAttribute('role','dialog'); root.setAttribute('aria-modal','true'); $('#layer').appendChild(root);
     let url=origC.toDataURL('image/jpeg',.75);
     const GIRO=`<div class="chips" style="justify-content:center;padding:8px 16px 0"><button class="chip" data-sc="rot" data-d="-1">↺ Girar a la izquierda</button><button class="chip" data-sc="rot" data-d="1">Girar a la derecha ↻</button></div>`;
@@ -1045,11 +1049,15 @@ function escanearDoc(origC,quad,filtro='mejorada'){
     pintar();
   });
 }
+/* guarda la foto lista y también la original con sus esquinas y tono, para poder cambiar el tono después */
+async function recFoto(id,blob,sc){ const r={id,blob}; if(sc&&sc.origC){ try{ const c=sc.origC, k=Math.min(1,2000/Math.max(c.width,c.height)); let src=c;
+    if(k<1){ src=document.createElement('canvas'); src.width=Math.round(c.width*k); src.height=Math.round(c.height*k); src.getContext('2d').drawImage(c,0,0,src.width,src.height); }
+    r.orig=await blobDeCanvas(src,.82); r.quad=sc.quad; r.filtro=sc.filtro; }catch(e){ console.warn(e); } } return r; }
 /* abre el escáner para la factura ('fact') o el comprobante ('comp') */
 async function escanearPara(t,file){
   const yo=W; let origC, quad, filtro='mejorada';
   if(file){ toast('Abriendo la foto…'); origC=await bitmapDe(file,2400); $('.toast').hidden=true; await new Promise(r=>setTimeout(r,20)); const r=detectarHoja(origC,true); quad=r&&r.q; }
-  else { const s=W.sc&&W.sc[t]; if(s){ origC=s.origC; quad=s.quad; filtro=s.filtro; } else { const b=t==='comp'?W.comp:W.foto; if(!b) return; origC=await bitmapDe(b,2400); quad=QUAD_TODO; } }
+  else { const s=W.sc&&W.sc[t]; if(s){ origC=s.origC; quad=s.quad; filtro=s.filtro; } else { const rec=W.rec&&W.rec[t]; if(rec&&rec.orig){ origC=await bitmapDe(rec.orig,2400); quad=rec.quad; filtro=rec.filtro||'mejorada'; } else { const b=t==='comp'?W.comp:W.foto; if(!b) return; origC=await bitmapDe(b,2400); quad=QUAD_TODO; filtro=rec?'original':filtro; } } }
   const res=await escanearDoc(origC,quad,filtro); if(!res||W!==yo) return;
   W.sc=W.sc||{}; W.sc[t]={origC:res.origC,quad:res.quad,filtro:res.filtro};
   if(t==='comp'){ if(W.compUrl) URL.revokeObjectURL(W.compUrl); W.comp=res.blob; W.compUrl=URL.createObjectURL(res.blob); W.compChanged=true; renderWz(); if(W.isNew) autoLeerComp(); }
@@ -1465,16 +1473,45 @@ async function compress(blob,max=1600,q=.78){
 async function onFoto(file){ if(FOTO_DIR) return fotoDirecta(file); if(!file||!W) return; const t=W.photoT==='comp'?'comp':'fact';
   try{ await escanearPara(t,file); }catch(e){ console.warn(e); toast('No se pudo leer esa imagen. Prueba con otra.'); } }
 
+/* ---------- visor de fotos: pellizcar para zoom, doble toque, arrastrar, botones + y − ---------- */
+function abrirVisor(src){ const v=document.createElement('div'); v.className='viewer'; v.setAttribute('role','dialog'); v.setAttribute('aria-modal','true');
+  v.innerHTML=`<img src="${src}" alt="Foto" draggable="false"><button class="x" aria-label="Cerrar">${svg(UI.x)}</button>
+    <div class="vz"><button data-z="-" aria-label="Alejar">−</button><button data-z="0" aria-label="Tamaño normal">1×</button><button data-z="+" aria-label="Acercar">+</button></div><div class="vz-hint">Pellizca o toca dos veces para hacer zoom</div>`;
+  document.body.appendChild(v); const img=v.querySelector('img'); let sc=1,tx=0,ty=0; const pts=new Map(); let start=null, lastTap=0;
+  const lim=()=>{ sc=Math.min(8,Math.max(1,sc)); if(sc===1){ tx=0; ty=0; return; } const r=v.getBoundingClientRect(), w=img.offsetWidth*sc, h=img.offsetHeight*sc, mx=Math.max(0,(w-r.width)/2), my=Math.max(0,(h-r.height)/2); tx=Math.min(mx,Math.max(-mx,tx)); ty=Math.min(my,Math.max(-my,ty)); };
+  const ap=(anim)=>{ lim(); img.style.transition=anim?'transform .2s':'none'; img.style.transform=`translate(${tx}px,${ty}px) scale(${sc})`; v.querySelector('[data-z="0"]').textContent=sc===1?'1×':sc.toFixed(1).replace('.0','')+'×'; };
+  const zoomEn=(f,cx,cy)=>{ const r=v.getBoundingClientRect(), ox=cx-r.left-r.width/2, oy=cy-r.top-r.height/2; const ns=Math.min(8,Math.max(1,sc*f)), k=ns/sc; tx=ox-(ox-tx)*k; ty=oy-(oy-ty)*k; sc=ns; };
+  v.addEventListener('pointerdown',e=>{ if(e.target.closest('button')) return; v.setPointerCapture(e.pointerId); pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    const a=[...pts.values()]; start={sc,tx,ty,a:a.map(p=>({...p})),d:a.length>1?Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y):0,cx:a.length>1?(a[0].x+a[1].x)/2:a[0].x,cy:a.length>1?(a[0].y+a[1].y)/2:a[0].y};
+    if(a.length===1){ const now=Date.now(); if(now-lastTap<300){ if(sc>1){ sc=1; } else zoomEn(2.5,e.clientX,e.clientY); ap(true); lastTap=0; } else lastTap=now; } });
+  v.addEventListener('pointermove',e=>{ if(!pts.has(e.pointerId)||!start) return; pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); const a=[...pts.values()];
+    if(a.length>1&&start.d){ const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y), cx=(a[0].x+a[1].x)/2, cy=(a[0].y+a[1].y)/2; sc=start.sc; tx=start.tx+(cx-start.cx); ty=start.ty+(cy-start.cy); zoomEn(d/start.d,cx,cy); }
+    else if(a.length===1&&sc>1){ tx=start.tx+(a[0].x-start.a[0].x); ty=start.ty+(a[0].y-start.a[0].y); }
+    ap(false); });
+  const fin=e=>{ pts.delete(e.pointerId); const a=[...pts.values()]; start=a.length?{sc,tx,ty,a:a.map(p=>({...p})),d:0,cx:a[0].x,cy:a[0].y}:null; };
+  v.addEventListener('pointerup',fin); v.addEventListener('pointercancel',fin);
+  v.addEventListener('wheel',e=>{ e.preventDefault(); zoomEn(e.deltaY<0?1.2:1/1.2,e.clientX,e.clientY); ap(false); },{passive:false});
+  v.addEventListener('click',e=>{ const z=e.target.closest('[data-z]'); if(e.target.closest('.x')){ v.remove(); return; }
+    if(z){ const r=v.getBoundingClientRect(); if(z.dataset.z==='0'){ sc=1; } else zoomEn(z.dataset.z==='+'?1.6:1/1.6,r.left+r.width/2,r.top+r.height/2); ap(true); } });
+  ap(false); }
+
 /* ---------- detalle ---------- */
 function botonesFoto(id,t,mini=false){ const ic=i=>svg(i).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"');
   return `<div class="two"><button class="btn ${mini?'btn-ghost':'btn-primary'}" data-act="foto-dir" data-id="${id}" data-t="${t}" data-src="cam">${ic(UI.cam)}Tomar foto</button><button class="btn btn-ghost" data-act="foto-dir" data-id="${id}" data-t="${t}" data-src="gal">${ic(UI.img)}Galería</button></div>`; }
 let FOTO_DIR=null;
+/* vuelve a abrir el escáner en el paso de tono para una foto ya guardada; no toca los datos */
+async function fotoTono(id,t){ const m=S.movs.find(x=>x.id===id); if(!m) return; const campo=t==='comp'?'compId':'fotoId'; const rec=m[campo]&&await DB.get('fotos',m[campo]); if(!rec) return;
+  try{ toast('Abriendo la foto…'); const conOrig=!!rec.orig; const origC=await bitmapDe(conOrig?rec.orig:rec.blob,2400); const tt=$('.toast'); if(tt) tt.hidden=true;
+    const res=await escanearDoc(origC,conOrig?rec.quad:QUAD_TODO,conOrig?(rec.filtro||'mejorada'):'original','filtro'); if(!res) return;
+    const nuevo=uid(); const r=await recFoto(nuevo,res.blob,res); if(!conOrig&&res.filtro!=='original'){ /* sin original guardado: la base sigue siendo la foto que había */ }
+    await DB.put('fotos',r); const m2={...m,[campo]:nuevo}; await DB.put('movs',m2); await DB.del('fotos',rec.id);
+    await loadAll(); render(); await verMov(m.id); toast('Foto actualizada. Los datos no cambiaron.'); }catch(e){ console.warn(e); toast('No se pudo abrir esa foto.'); } }
 /* pone la foto a un gasto ya guardado: solo recorta y mejora, NO lee ni cambia los datos */
 async function fotoDirecta(file){ const fd=FOTO_DIR; FOTO_DIR=null; if(!file||!fd) return;
   try{ toast('Abriendo la foto…'); const origC=await bitmapDe(file,2400); const tt=$('.toast'); if(tt) tt.hidden=true; await new Promise(r=>setTimeout(r,20));
     const r=detectarHoja(origC,true); const res=await escanearDoc(origC,r&&r.q,'mejorada'); if(!res) return;
     const m=S.movs.find(x=>x.id===fd.id); if(!m) return; const campo=fd.t==='comp'?'compId':'fotoId';
-    const nuevo=uid(); await DB.put('fotos',{id:nuevo,blob:res.blob}); const viejo=m[campo];
+    const nuevo=uid(); await DB.put('fotos',await recFoto(nuevo,res.blob,res)); const viejo=m[campo];
     const m2={...m,[campo]:nuevo}; await DB.put('movs',m2); if(viejo) await DB.del('fotos',viejo);
     await loadAll(); render(); await verMov(m.id); toast(fd.t==='comp'?'Comprobante guardado':'Foto guardada. Los datos no cambiaron.'); askPersist();
   }catch(e){ console.warn(e); toast('No se pudo guardar esa imagen. Prueba con otra.'); } }
@@ -1488,11 +1525,11 @@ async function verMov(id){
       <div style="min-width:0"><div style="font-family:var(--f-display);font-size:28px;font-weight:700" class="num">${ing?'+':'−'}${money(m.valor)}</div><div style="color:var(--muted)">${listaDetalle(m.detalle)}</div></div></div>
     ${ing?'':(url?`<button style="padding:0;border:0;background:none;width:100%;margin-bottom:12px;border-radius:var(--r);overflow:hidden" data-act="zoom" data-src="${url}"><img class="thumb" src="${url}" alt="Factura"></button>`
       :`<div class="card add-foto"><div class="note" style="margin:0 0 8px;color:var(--warn)">${svg(UI.nophoto).replace('<svg','<svg style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;vertical-align:-3px;margin-right:4px"')}Sin foto ${m.persona?'del recibo':'de la factura'}. Agrégala sin cambiar los datos:</div>${botonesFoto(m.id,'fact')}</div>`)}
-    ${!ing&&url?`<div class="add-foto-mini"><span>Cambiar foto:</span>${botonesFoto(m.id,'fact',true)}</div>`:''}
+    ${!ing&&url?`<div class="foto-tools"><button class="chip" data-act="zoom" data-src="${url}">🔍 Ver con zoom</button><button class="chip" data-act="foto-tono" data-id="${m.id}" data-t="fact">🎨 Tono y esquinas</button></div><div class="add-foto-mini"><span>Cambiar foto:</span>${botonesFoto(m.id,'fact',true)}</div>`:''}
     ${aurl?`<div class="card" style="margin-bottom:12px"><div class="note" style="margin:0 0 6px">Nota de voz${m.voz?`: <i>“${esc(m.voz)}”</i>`:''}</div><audio controls src="${aurl}"></audio></div>`:''}
     ${m.pendiente?`<button class="btn btn-primary btn-block" style="margin-bottom:12px" data-act="editar" data-id="${m.id}">${svg(UI.cam).replace('<svg','<svg style="stroke:currentColor;fill:none;stroke-width:2"')}Completar con la foto y los datos</button>`:''}
     ${!ing&&!curl&&m.pago&&m.pago!=='EFECTIVO'?`<div class="card add-foto"><div class="note" style="margin:0 0 8px">Foto ${m.pago==='CHEQUE'?'del cheque':'del comprobante de transferencia'} (opcional):</div>${botonesFoto(m.id,'comp')}</div>`:''}
-    ${curl?`<div class="note" style="margin:0 2px 6px">Foto ${m.pago==='CHEQUE'?'del cheque':'del comprobante'}</div><button style="padding:0;border:0;background:none;width:100%;margin-bottom:12px;border-radius:var(--r);overflow:hidden" data-act="zoom" data-src="${curl}"><img class="thumb" src="${curl}" alt="Comprobante"></button>`:''}
+    ${curl?`<div class="note" style="margin:0 2px 6px">Foto ${m.pago==='CHEQUE'?'del cheque':'del comprobante'}</div><button style="padding:0;border:0;background:none;width:100%;margin-bottom:12px;border-radius:var(--r);overflow:hidden" data-act="zoom" data-src="${curl}"><img class="thumb" src="${curl}" alt="Comprobante"></button><div class="foto-tools" style="margin-top:-4px"><button class="chip" data-act="zoom" data-src="${curl}">🔍 Ver con zoom</button><button class="chip" data-act="foto-tono" data-id="${m.id}" data-t="comp">🎨 Tono y esquinas</button></div>`:''}
     <div class="review">
       ${ing?'':`<div class="rv"><span>Categoría</span><b>${esc(CAT[m.categoria]?.n||m.categoria)}</b></div>
       <div class="rv"><span>Beneficiario</span><b>${esc(m.beneficiario||'—')}</b></div>
@@ -1763,6 +1800,7 @@ document.addEventListener('click',async e=>{
     case 'fpago-ir': S.fp=b.dataset.v; closeLayer(); S.view='inicio'; render(); setTimeout(()=>$('#lista')?.scrollIntoView({behavior:'smooth',block:'start'}),50); break;
     case 'close': closeLayer(); break;
     case 'wz-close': if(W && (W.fotoUrl||W.d.valor||W.d.detalle) && W.isNew){ if(!arm(b,'wz','?')) { b.innerHTML='<b style="font-size:11px;color:var(--bad)">¿Salir?</b>'; return; } } closeLayer(); break;
+    case 'foto-tono': fotoTono(b.dataset.id,b.dataset.t); break;
     case 'foto-dir': FOTO_DIR={id:b.dataset.id,t:b.dataset.t}; $(b.dataset.src==='gal'?'#f-gal':'#f-cam').click(); break;
     case 'cam': FOTO_DIR=null; if(W) W.photoT=b.dataset.t||'fact'; $('#f-cam').click(); break;
     case 'gal': FOTO_DIR=null; if(W) W.photoT=b.dataset.t||'fact'; $('#f-gal').click(); break;
@@ -1784,8 +1822,7 @@ document.addEventListener('click',async e=>{
     case 'w-listo': { const err=wzValid(); if(err){ $('#w-err').textContent=err; return; } W.step=steps().length-1; W.volver=false; renderWz(); break; }
     case 'w-save': b.disabled=true; await wzSave(); break;
     case 'ver': verMov(b.dataset.id); break;
-    case 'zoom': { const v=document.createElement('div'); v.className='viewer'; v.innerHTML=`<img src="${b.dataset.src}" alt="Factura"><button class="x" aria-label="Cerrar">${svg(UI.x)}</button>`;
-      v.addEventListener('click',ev=>{ if(ev.target.closest('.x')) v.remove(); else v.classList.toggle('zoom'); }); document.body.appendChild(v); break; }
+    case 'zoom': abrirVisor(b.dataset.src); break;
     case 'editar': { const m=S.movs.find(x=>x.id===b.dataset.id); closeLayer(); if(m.tipo==='ingreso') formIngreso(m); else if(m.tipo==='traspaso') formTraspaso(m.dir,m); else { await editarGasto(m); if(b.dataset.s){ W.step=+b.dataset.s; W.volver=true; renderWz(); } } break; }
     case 'borrar': { if(!arm(b,'del'+b.dataset.id,'Toca otra vez para eliminar')) return; const m=S.movs.find(x=>x.id===b.dataset.id); if(m.fotoId) await DB.del('fotos',m.fotoId); if(m.compId) await DB.del('fotos',m.compId); if(m.audioId && !S.movs.some(x=>x.id!==m.id&&x.audioId===m.audioId)) await DB.del('fotos',m.audioId); await DB.del('movs',m.id); await loadAll(); closeLayer(); render(); toast('Movimiento eliminado'); break; }
     case 'fechas': S.fechasOpen=!(S.fechasOpen||S.d1||S.d2); if(!S.fechasOpen){ S.d1=''; S.d2=''; } render(); if(S.fechasOpen) setTimeout(()=>$('#fechas')?.scrollIntoView({block:'nearest',behavior:'smooth'}),30); break;
